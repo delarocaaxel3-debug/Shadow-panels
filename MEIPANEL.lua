@@ -1,5 +1,4 @@
--- SHADOW PURSUIT | PURPLE EDITION v2.1
--- UI + FOV circle demo | Mobile + PC
+-- cheat by mds | UI clone | Mobile + PC
 -- LocalScript in StarterPlayerScripts
 
 local Players          = game:GetService("Players")
@@ -10,42 +9,41 @@ local TweenService     = game:GetService("TweenService")
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ===== Palette =====
-local Purple       = Color3.fromRGB(145, 65, 220)
-local PurpleBright = Color3.fromRGB(185, 110, 255)
-local PurpleDeep   = Color3.fromRGB(72, 30, 120)
-local DarkPurple   = Color3.fromRGB(30, 16, 46)
-local PanelColor   = Color3.fromRGB(18, 11, 28)
-local RowColor     = Color3.fromRGB(32, 20, 48)
-local TextColor    = Color3.fromRGB(245, 238, 255)
-local TextDim      = Color3.fromRGB(160, 150, 185)
-local OffGrey      = Color3.fromRGB(60, 48, 78)
+-- ===== Palette (screenshot-matched) =====
+local BG         = Color3.fromRGB(10, 10, 12)
+local Row        = Color3.fromRGB(20, 20, 23)
+local RowAlt     = Color3.fromRGB(26, 26, 30)
+local Accent     = Color3.fromRGB(255, 45, 105)   -- pink
+local AccentSoft = Color3.fromRGB(255, 100, 145)
+local AccentDeep = Color3.fromRGB(90, 20, 45)
+local TxtHi      = Color3.fromRGB(238, 238, 242)
+local TxtDim     = Color3.fromRGB(130, 130, 140)
+local TxtFaint   = Color3.fromRGB(85, 85, 95)
 
 -- ===== Asset =====
-local IMAGE_ID = "rbxassetid://0" -- << paste your uploaded decal id here
+local IMAGE_ID = "rbxassetid://0" -- << paste your decal id
 
 -- ===== Settings =====
 local Settings = {
     AimEnabled   = false,
-    WallCheck    = true,
-    KillCheck    = false,
-    TeamCheck    = true,
     ShowFov      = true,
     GodMode      = false,
+    AimStrength  = 27,
+    FOV          = 7,
+    AimTarget    = "Head",
     InfiniteAmmo = false,
     NoReload     = false,
-    FOV          = 25,       -- 1..100 percent of half-viewport-min
-    Sensitivity  = 50,
+    WallCheck    = true,
+    TeamCheck    = true,
     DiscordLink  = "https://discord.gg/CM9maT4GEa",
 }
 
 -- ===== Wipe old =====
-local oldGui = playerGui:FindFirstChild("ShadowUI")
-if oldGui then oldGui:Destroy() end
+local old = playerGui:FindFirstChild("MdsUI")
+if old then old:Destroy() end
 
--- ===== Root =====
 local gui = Instance.new("ScreenGui")
-gui.Name           = "ShadowUI"
+gui.Name           = "MdsUI"
 gui.ResetOnSpawn   = false
 gui.IgnoreGuiInset = true
 gui.DisplayOrder   = 100
@@ -54,7 +52,6 @@ gui.Parent         = playerGui
 
 -- ===== FOV circle =====
 local fovCircle = Instance.new("Frame")
-fovCircle.Name                   = "FovCircle"
 fovCircle.AnchorPoint            = Vector2.new(0.5, 0.5)
 fovCircle.Position               = UDim2.fromScale(0.5, 0.5)
 fovCircle.BackgroundTransparency = 1
@@ -63,172 +60,142 @@ fovCircle.Parent                 = gui
 Instance.new("UICorner", fovCircle).CornerRadius = UDim.new(1, 0)
 
 local fovStroke = Instance.new("UIStroke")
-fovStroke.Color        = PurpleBright
-fovStroke.Thickness    = 1.8
-fovStroke.Transparency = 0.15
+fovStroke.Color        = Accent
+fovStroke.Thickness    = 1.6
+fovStroke.Transparency = 0.25
 fovStroke.Parent       = fovCircle
 
-local fovGlow = Instance.new("Frame")
-fovGlow.Name                   = "Glow"
-fovGlow.AnchorPoint            = Vector2.new(0.5, 0.5)
-fovGlow.Position               = UDim2.fromScale(0.5, 0.5)
-fovGlow.BackgroundColor3       = Purple
-fovGlow.BackgroundTransparency = 0.92
-fovGlow.Size                   = UDim2.fromOffset(0, 0)
-fovGlow.ZIndex                 = 1
-fovGlow.Parent                 = gui
-Instance.new("UICorner", fovGlow).CornerRadius = UDim.new(1, 0)
+local fovDot = Instance.new("Frame")
+fovDot.AnchorPoint      = Vector2.new(0.5, 0.5)
+fovDot.Position         = UDim2.fromScale(0.5, 0.5)
+fovDot.Size             = UDim2.fromOffset(3, 3)
+fovDot.BackgroundColor3 = Accent
+fovDot.BorderSizePixel  = 0
+fovDot.ZIndex           = 3
+fovDot.Parent           = gui
+Instance.new("UICorner", fovDot).CornerRadius = UDim.new(1, 0)
 
-local dot = Instance.new("Frame")
-dot.AnchorPoint      = Vector2.new(0.5, 0.5)
-dot.Position         = UDim2.fromScale(0.5, 0.5)
-dot.Size             = UDim2.fromOffset(4, 4)
-dot.BackgroundColor3 = PurpleBright
-dot.BorderSizePixel  = 0
-dot.ZIndex           = 3
-dot.Visible          = false
-dot.Parent           = gui
-Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
-
-local function updateFovCircle()
+local function updateFov()
     local cam = workspace.CurrentCamera
     if not cam then return end
     local vp   = cam.ViewportSize
     local maxR = math.min(vp.X, vp.Y) * 0.5
     local r    = math.max(1, maxR * (Settings.FOV / 100))
-
     fovCircle.Size = UDim2.fromOffset(r * 2, r * 2)
-    fovGlow.Size   = UDim2.fromOffset(r * 2 + 18, r * 2 + 18)
-
-    fovCircle.Visible = Settings.AimEnabled and Settings.ShowFov
-    fovGlow.Visible   = fovCircle.Visible
-    dot.Visible       = fovCircle.Visible
+    local show = Settings.AimEnabled and Settings.ShowFov
+    fovCircle.Visible = show
+    fovDot.Visible    = show
 end
 
-workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+local function hookCam()
     local cam = workspace.CurrentCamera
-    if cam then
-        cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateFovCircle)
-    end
-    updateFovCircle()
-end)
-if workspace.CurrentCamera then
-    workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(updateFovCircle)
+    if cam then cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateFov) end
+    updateFov()
 end
+workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCam)
+hookCam()
 
 -- ===== Main panel =====
 local main = Instance.new("Frame")
 main.Name             = "Main"
-main.Size             = UDim2.fromOffset(360, 460)
-main.Position         = UDim2.new(0.5, -180, 0.5, -230)
-main.BackgroundColor3 = PanelColor
+main.Size             = UDim2.fromOffset(370, 470)
+main.Position         = UDim2.new(0.5, -185, 0.5, -235)
+main.BackgroundColor3 = BG
 main.BorderSizePixel  = 0
 main.ClipsDescendants = true
 main.Parent           = gui
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 14)
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color        = Purple
-mainStroke.Thickness    = 1.5
-mainStroke.Transparency = 0.35
+mainStroke.Color        = Color3.fromRGB(40, 40, 46)
+mainStroke.Thickness    = 1
+mainStroke.Transparency = 0.2
 mainStroke.Parent       = main
-
--- ===== Floating open button (image) =====
-local floatButton = Instance.new("ImageButton")
-floatButton.Name              = "OpenCloseButton"
-floatButton.Size              = UDim2.fromOffset(64, 64)
-floatButton.Position          = UDim2.new(0, 18, 0.5, -32)
-floatButton.BackgroundColor3  = DarkPurple
-floatButton.BorderSizePixel   = 0
-floatButton.AutoButtonColor   = false
-floatButton.ZIndex            = 10
-floatButton.Image             = IMAGE_ID
-floatButton.ImageTransparency = 0.05
-floatButton.ScaleType         = Enum.ScaleType.Crop
-floatButton.Parent            = gui
-Instance.new("UICorner", floatButton).CornerRadius = UDim.new(1, 0)
-
-local floatStroke = Instance.new("UIStroke")
-floatStroke.Color        = PurpleBright
-floatStroke.Thickness    = 2
-floatStroke.Transparency = 0.1
-floatStroke.Parent       = floatButton
-
--- fallback text when the id is unset / fails
-local floatFallback = Instance.new("TextLabel")
-floatFallback.Size                   = UDim2.fromScale(1, 1)
-floatFallback.BackgroundTransparency = 1
-floatFallback.Text                   = "SH"
-floatFallback.TextColor3             = TextColor
-floatFallback.TextSize               = 20
-floatFallback.Font                   = Enum.Font.GothamBold
-floatFallback.ZIndex                 = 11
-floatFallback.Parent                 = floatButton
-floatFallback.Visible = (IMAGE_ID == "" or IMAGE_ID == "rbxassetid://0")
 
 -- ===== Header =====
 local header = Instance.new("Frame")
 header.Name             = "Header"
-header.Size             = UDim2.new(1, 0, 0, 52)
-header.BackgroundColor3 = DarkPurple
-header.BorderSizePixel  = 0
+header.Size             = UDim2.new(1, 0, 0, 62)
+header.BackgroundTransparency = 1
 header.Parent           = main
 
-local headerGrad = Instance.new("UIGradient")
-headerGrad.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(55, 25, 90)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 14, 40)),
-}
-headerGrad.Rotation = 90
-headerGrad.Parent   = header
-
 local title = Instance.new("TextLabel")
-title.Size                   = UDim2.new(1, -125, 1, 0)
-title.Position               = UDim2.fromOffset(16, 0)
+title.Position               = UDim2.fromOffset(16, 12)
+title.Size                   = UDim2.new(1, -160, 0, 22)
 title.BackgroundTransparency = 1
-title.Text                   = "SHADOW PURSUIT"
-title.TextColor3             = TextColor
+title.Text                   = "cheat by mds"
+title.TextColor3             = Accent
 title.TextSize               = 17
 title.Font                   = Enum.Font.GothamBold
 title.TextXAlignment         = Enum.TextXAlignment.Left
 title.Parent                 = header
 
-local subtitle = Instance.new("TextLabel")
-subtitle.Size                   = UDim2.new(1, -125, 0, 12)
-subtitle.Position               = UDim2.fromOffset(16, 34)
-subtitle.BackgroundTransparency = 1
-subtitle.Text                   = "PURPLE EDITION"
-subtitle.TextColor3             = PurpleBright
-subtitle.TextSize               = 10
-subtitle.Font                   = Enum.Font.GothamBold
-subtitle.TextXAlignment         = Enum.TextXAlignment.Left
-subtitle.Parent                 = header
+local sub = Instance.new("TextLabel")
+sub.Position               = UDim2.fromOffset(16, 34)
+sub.Size                   = UDim2.new(1, -160, 0, 14)
+sub.BackgroundTransparency = 1
+sub.Text                   = "by mds"
+sub.TextColor3             = TxtFaint
+sub.TextSize               = 11
+sub.Font                   = Enum.Font.Gotham
+sub.TextXAlignment         = Enum.TextXAlignment.Left
+sub.Parent                 = header
 
-local closeButton = Instance.new("TextButton")
-closeButton.Size             = UDim2.fromOffset(30, 30)
-closeButton.Position         = UDim2.new(1, -42, 0, 11)
-closeButton.BackgroundColor3 = Color3.fromRGB(80, 35, 100)
-closeButton.Text             = "✕"
-closeButton.TextColor3       = TextColor
-closeButton.TextSize         = 16
-closeButton.Font             = Enum.Font.GothamBold
-closeButton.BorderSizePixel  = 0
-closeButton.AutoButtonColor  = true
-closeButton.Parent           = header
-Instance.new("UICorner", closeButton).CornerRadius = UDim.new(0, 7)
+local expiresLbl = Instance.new("TextLabel")
+expiresLbl.AnchorPoint         = Vector2.new(1, 0)
+expiresLbl.Position            = UDim2.new(1, -70, 0, 12)
+expiresLbl.Size                = UDim2.fromOffset(120, 16)
+expiresLbl.BackgroundTransparency = 1
+expiresLbl.Text                = "Expires at"
+expiresLbl.TextColor3          = Accent
+expiresLbl.TextSize            = 11
+expiresLbl.Font                = Enum.Font.GothamBold
+expiresLbl.TextXAlignment      = Enum.TextXAlignment.Right
+expiresLbl.Parent              = header
+
+local expiresVal = Instance.new("TextLabel")
+expiresVal.AnchorPoint         = Vector2.new(1, 0)
+expiresVal.Position            = UDim2.new(1, -70, 0, 28)
+expiresVal.Size                = UDim2.fromOffset(120, 16)
+expiresVal.BackgroundTransparency = 1
+expiresVal.Text                = "Unlimited"
+expiresVal.TextColor3          = TxtDim
+expiresVal.TextSize            = 11
+expiresVal.Font                = Enum.Font.Gotham
+expiresVal.TextXAlignment      = Enum.TextXAlignment.Right
+expiresVal.Parent              = header
+
+-- small round icon top-right (matches the little circle in the shot)
+local headerIcon = Instance.new("Frame")
+headerIcon.AnchorPoint      = Vector2.new(1, 0)
+headerIcon.Position         = UDim2.new(1, -16, 0, 20)
+headerIcon.Size             = UDim2.fromOffset(26, 26)
+headerIcon.BackgroundColor3 = RowAlt
+headerIcon.BorderSizePixel  = 0
+headerIcon.Parent           = header
+Instance.new("UICorner", headerIcon).CornerRadius = UDim.new(1, 0)
+
+local iconStroke = Instance.new("UIStroke")
+iconStroke.Color        = AccentDeep
+iconStroke.Thickness    = 1.5
+iconStroke.Parent       = headerIcon
+
+local iconGlyph = Instance.new("TextLabel")
+iconGlyph.Size                   = UDim2.fromScale(1, 1)
+iconGlyph.BackgroundTransparency = 1
+iconGlyph.Text                   = "!"
+iconGlyph.TextColor3             = Accent
+iconGlyph.TextSize               = 15
+iconGlyph.Font                   = Enum.Font.GothamBold
+iconGlyph.Parent                 = headerIcon
 
 -- ===== Draggable =====
 local function makeDraggable(frame, onTap)
     local dragging, dragStart, startPos, moved = false, nil, nil, false
-
     frame.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
         or input.UserInputType == Enum.UserInputType.Touch then
-            dragging  = true
-            dragStart = input.Position
-            startPos  = frame.Position
-            moved     = false
-
+            dragging, dragStart, startPos, moved = true, input.Position, frame.Position, false
             input.Changed:Connect(function()
                 if input.UserInputState == Enum.UserInputState.End then
                     dragging = false
@@ -237,285 +204,242 @@ local function makeDraggable(frame, onTap)
             end)
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType == Enum.UserInputType.MouseMovement
         or input.UserInputType == Enum.UserInputType.Touch then
-            local delta = input.Position - dragStart
-            if math.abs(delta.X) > 6 or math.abs(delta.Y) > 6 then
-                moved = true
-            end
+            local d = input.Position - dragStart
+            if math.abs(d.X) > 6 or math.abs(d.Y) > 6 then moved = true end
             if moved then
                 frame.Position = UDim2.new(
-                    startPos.X.Scale,
-                    startPos.X.Offset + delta.X,
-                    startPos.Y.Scale,
-                    startPos.Y.Offset + delta.Y
-                )
+                    startPos.X.Scale, startPos.X.Offset + d.X,
+                    startPos.Y.Scale, startPos.Y.Offset + d.Y)
             end
         end
     end)
 end
 
+-- ===== Floating button =====
+local floatBtn = Instance.new("ImageButton")
+floatBtn.Name              = "OpenClose"
+floatBtn.Size              = UDim2.fromOffset(58, 58)
+floatBtn.Position          = UDim2.new(0, 18, 0.5, -29)
+floatBtn.BackgroundColor3  = Row
+floatBtn.BorderSizePixel   = 0
+floatBtn.AutoButtonColor   = false
+floatBtn.ZIndex            = 10
+floatBtn.Image             = IMAGE_ID
+floatBtn.ImageTransparency = 0.05
+floatBtn.ScaleType         = Enum.ScaleType.Crop
+floatBtn.Parent            = gui
+Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 12)
+
+local floatStroke = Instance.new("UIStroke")
+floatStroke.Color     = Accent
+floatStroke.Thickness = 1.8
+floatStroke.Parent    = floatBtn
+
+local floatFallback = Instance.new("TextLabel")
+floatFallback.Size                   = UDim2.fromScale(1, 1)
+floatFallback.BackgroundTransparency = 1
+floatFallback.Text                   = "MDS"
+floatFallback.TextColor3             = Accent
+floatFallback.TextSize               = 14
+floatFallback.Font                   = Enum.Font.GothamBold
+floatFallback.ZIndex                 = 11
+floatFallback.Parent                 = floatBtn
+floatFallback.Visible = (IMAGE_ID == "" or IMAGE_ID == "rbxassetid://0")
+
 local function togglePanel()
     main.Visible = not main.Visible
-    local t = TweenService:Create(floatButton, TweenInfo.new(0.12, Enum.EasingStyle.Back), {
-        Size = main.Visible and UDim2.fromOffset(70, 70) or UDim2.fromOffset(64, 64)
-    })
-    t:Play()
-    t.Completed:Wait()
-    TweenService:Create(floatButton, TweenInfo.new(0.1), {
-        Size = UDim2.fromOffset(64, 64)
-    }):Play()
 end
 
-makeDraggable(floatButton, togglePanel)
+makeDraggable(floatBtn, togglePanel)
 makeDraggable(header, nil)
 
-closeButton.Activated:Connect(function()
-    main.Visible = false
-end)
-
--- ===== Tabs =====
-local tabBar = Instance.new("Frame")
-tabBar.Position         = UDim2.fromOffset(12, 62)
-tabBar.Size             = UDim2.new(1, -24, 0, 36)
-tabBar.BackgroundColor3 = Color3.fromRGB(26, 16, 40)
-tabBar.BorderSizePixel  = 0
-tabBar.Parent           = main
-Instance.new("UICorner", tabBar).CornerRadius = UDim.new(0, 9)
-
-local tabLayout = Instance.new("UIListLayout")
-tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding       = UDim.new(0, 4)
-tabLayout.Parent        = tabBar
-
-local tabPad = Instance.new("UIPadding")
-tabPad.PaddingLeft   = UDim.new(0, 4)
-tabPad.PaddingRight  = UDim.new(0, 4)
-tabPad.PaddingTop    = UDim.new(0, 4)
-tabPad.PaddingBottom = UDim.new(0, 4)
-tabPad.Parent        = tabBar
-
-local tabs = {}
-
-local function makeTab(name)
-    local btn = Instance.new("TextButton")
-    btn.Size             = UDim2.new(0.5, -4, 1, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(32, 20, 48)
-    btn.Text             = name
-    btn.TextColor3       = TextDim
-    btn.TextSize         = 13
-    btn.Font             = Enum.Font.GothamBold
-    btn.BorderSizePixel  = 0
-    btn.AutoButtonColor  = false
-    btn.Parent           = tabBar
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
-    tabs[name] = btn
-    return btn
-end
-
-local function setActiveTab(name)
-    for n, b in pairs(tabs) do
-        local on = (n == name)
-        TweenService:Create(b, TweenInfo.new(0.15), {
-            BackgroundColor3 = on and Purple or Color3.fromRGB(32, 20, 48),
-            TextColor3       = on and TextColor or TextDim,
-        }):Play()
-    end
-end
-
--- ===== Content =====
+-- ===== Content scroll =====
 local content = Instance.new("ScrollingFrame")
-content.Position             = UDim2.fromOffset(12, 110)
-content.Size                 = UDim2.new(1, -24, 1, -122)
+content.Position             = UDim2.fromOffset(10, 70)
+content.Size                 = UDim2.new(1, -20, 1, -108)
 content.BackgroundTransparency = 1
 content.BorderSizePixel      = 0
-content.ScrollBarThickness   = 4
-content.ScrollBarImageColor3 = Purple
+content.ScrollBarThickness   = 3
+content.ScrollBarImageColor3 = Accent
 content.AutomaticCanvasSize  = Enum.AutomaticSize.Y
 content.CanvasSize           = UDim2.new(0, 0, 0, 0)
 content.Parent               = main
 
-local layout = Instance.new("UIListLayout")
-layout.Padding   = UDim.new(0, 8)
-layout.SortOrder = Enum.SortOrder.LayoutOrder
-layout.Parent    = content
+local list = Instance.new("UIListLayout")
+list.Padding   = UDim.new(0, 6)
+list.SortOrder = Enum.SortOrder.LayoutOrder
+list.Parent    = content
 
-local function clearContent()
-    for _, c in ipairs(content:GetChildren()) do
-        if c ~= layout then c:Destroy() end
-    end
+local function divider()
+    local d = Instance.new("Frame")
+    d.Size             = UDim2.new(1, -8, 0, 1)
+    d.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    d.BorderSizePixel  = 0
+    d.Parent           = content
 end
 
--- ===== Toggle =====
-local function addToggle(text, key, onChange)
+-- ===== Toggle row (screenshot style) =====
+local function addToggle(name, desc, key, onChange)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -4, 0, 42)
-    row.BackgroundColor3 = RowColor
+    row.Size             = UDim2.new(1, -6, 0, 46)
+    row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
 
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(14, 0)
-    label.Size                   = UDim2.new(1, -100, 1, 0)
+    label.Position               = UDim2.fromOffset(14, 6)
+    label.Size                   = UDim2.new(1, -90, 0, 18)
     label.BackgroundTransparency = 1
-    label.Text                   = text
-    label.TextColor3             = TextColor
+    label.Text                   = name
+    label.TextColor3             = Settings[key] and AccentSoft or TxtHi
     label.TextSize               = 13
-    label.Font                   = Enum.Font.Gotham
+    label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
-    local track = Instance.new("Frame")
-    track.Size             = UDim2.fromOffset(50, 26)
-    track.Position         = UDim2.new(1, -62, 0.5, -13)
-    track.BackgroundColor3 = Settings[key] and Purple or OffGrey
-    track.BorderSizePixel  = 0
-    track.Parent           = row
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+    local descLbl = Instance.new("TextLabel")
+    descLbl.Position               = UDim2.fromOffset(14, 25)
+    descLbl.Size                   = UDim2.new(1, -90, 0, 14)
+    descLbl.BackgroundTransparency = 1
+    descLbl.Text                   = desc or ""
+    descLbl.TextColor3             = TxtFaint
+    descLbl.TextSize               = 11
+    descLbl.Font                   = Enum.Font.Gotham
+    descLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    descLbl.Parent                 = row
 
-    local knob = Instance.new("Frame")
-    knob.Size             = UDim2.fromOffset(20, 20)
-    knob.Position         = Settings[key]
-        and UDim2.new(1, -23, 0.5, -10)
-        or  UDim2.new(0, 3, 0.5, -10)
-    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    knob.BorderSizePixel  = 0
-    knob.Parent           = track
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+    local check = Instance.new("TextButton")
+    check.AnchorPoint      = Vector2.new(1, 0.5)
+    check.Position         = UDim2.new(1, -14, 0.5, 0)
+    check.Size             = UDim2.fromOffset(28, 28)
+    check.BackgroundColor3 = Settings[key] and Accent or RowAlt
+    check.Text             = Settings[key] and "✓" or ""
+    check.TextColor3       = Color3.fromRGB(255, 255, 255)
+    check.TextSize         = 15
+    check.Font             = Enum.Font.GothamBold
+    check.BorderSizePixel  = 0
+    check.AutoButtonColor  = false
+    check.Parent           = row
+    Instance.new("UICorner", check).CornerRadius = UDim.new(0, 7)
 
-    local btn = Instance.new("TextButton")
-    btn.Size                   = UDim2.new(1, 0, 1, 0)
-    btn.BackgroundTransparency = 1
-    btn.Text                   = ""
-    btn.ZIndex                 = 2
-    btn.Parent                 = row
+    local stroke = Instance.new("UIStroke")
+    stroke.Color        = Settings[key] and AccentSoft or Color3.fromRGB(45, 45, 52)
+    stroke.Thickness    = 1
+    stroke.Transparency = 0.2
+    stroke.Parent       = check
 
-    local function refresh(animate)
+    local hit = Instance.new("TextButton")
+    hit.Size                   = UDim2.new(1, 0, 1, 0)
+    hit.BackgroundTransparency = 1
+    hit.Text                   = ""
+    hit.ZIndex                 = 2
+    hit.Parent                 = row
+
+    local function refresh(anim)
         local on   = Settings[key]
-        local info = animate and TweenInfo.new(0.16, Enum.EasingStyle.Quad) or TweenInfo.new(0)
-        TweenService:Create(track, info, {
-            BackgroundColor3 = on and Purple or OffGrey,
+        local info = anim and TweenInfo.new(0.14, Enum.EasingStyle.Quad) or TweenInfo.new(0)
+        TweenService:Create(check, info, {
+            BackgroundColor3 = on and Accent or RowAlt,
         }):Play()
-        TweenService:Create(knob, info, {
-            Position = on
-                and UDim2.new(1, -23, 0.5, -10)
-                or  UDim2.new(0, 3, 0.5, -10),
+        TweenService:Create(stroke, info, {
+            Color = on and AccentSoft or Color3.fromRGB(45, 45, 52),
         }):Play()
+        TweenService:Create(label, info, {
+            TextColor3 = on and AccentSoft or TxtHi,
+        }):Play()
+        check.Text = on and "✓" or ""
     end
 
-    refresh(false)
-
-    btn.Activated:Connect(function()
+    hit.Activated:Connect(function()
         Settings[key] = not Settings[key]
         refresh(true)
         if onChange then onChange(Settings[key]) end
     end)
 end
 
--- ===== Slider =====
-local function addSlider(text, key, min, max, onChange)
-    local frame = Instance.new("Frame")
-    frame.Size             = UDim2.new(1, -4, 0, 62)
-    frame.BackgroundColor3 = RowColor
-    frame.BorderSizePixel  = 0
-    frame.Parent           = content
-    Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+-- ===== Slider row =====
+local function addSlider(name, key, min, max, onChange)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, -6, 0, 52)
+    row.BackgroundColor3 = Row
+    row.BorderSizePixel  = 0
+    row.Parent           = content
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
 
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(14, 4)
-    label.Size                   = UDim2.new(1, -28, 0, 22)
+    label.Position               = UDim2.fromOffset(14, 8)
+    label.Size                   = UDim2.new(1, -70, 0, 18)
     label.BackgroundTransparency = 1
-    label.TextColor3             = TextColor
+    label.Text                   = name
+    label.TextColor3             = TxtHi
     label.TextSize               = 13
-    label.Font                   = Enum.Font.Gotham
+    label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
-    label.Parent                 = frame
+    label.Parent                 = row
 
-    local valueTag = Instance.new("TextLabel")
-    valueTag.AnchorPoint         = Vector2.new(1, 0)
-    valueTag.Position            = UDim2.new(1, -14, 0, 4)
-    valueTag.Size                = UDim2.fromOffset(60, 22)
-    valueTag.BackgroundTransparency = 1
-    valueTag.TextColor3          = PurpleBright
-    valueTag.TextSize            = 13
-    valueTag.Font                = Enum.Font.GothamBold
-    valueTag.TextXAlignment      = Enum.TextXAlignment.Right
-    valueTag.Parent              = frame
+    local value = Instance.new("TextLabel")
+    value.AnchorPoint         = Vector2.new(1, 0)
+    value.Position            = UDim2.new(1, -14, 0, 8)
+    value.Size                = UDim2.fromOffset(50, 18)
+    value.BackgroundTransparency = 1
+    value.TextColor3          = TxtDim
+    value.TextSize            = 12
+    value.Font                = Enum.Font.Gotham
+    value.TextXAlignment      = Enum.TextXAlignment.Right
+    value.Parent              = row
 
-    local slider = Instance.new("TextButton")
-    slider.Position         = UDim2.fromOffset(14, 34)
-    slider.Size             = UDim2.new(1, -28, 0, 14)
-    slider.BackgroundColor3 = Color3.fromRGB(55, 40, 72)
-    slider.Text             = ""
-    slider.AutoButtonColor  = false
-    slider.Parent           = frame
-    Instance.new("UICorner", slider).CornerRadius = UDim.new(1, 0)
+    local track = Instance.new("TextButton")
+    track.Position         = UDim2.fromOffset(14, 34)
+    track.Size             = UDim2.new(1, -28, 0, 6)
+    track.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
+    track.Text             = ""
+    track.AutoButtonColor  = false
+    track.Parent           = row
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
 
     local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = Purple
+    fill.BackgroundColor3 = Accent
     fill.BorderSizePixel  = 0
-    fill.Parent           = slider
+    fill.Parent           = track
     Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
 
-    local fillGrad = Instance.new("UIGradient")
-    fillGrad.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Purple),
-        ColorSequenceKeypoint.new(1, PurpleBright),
-    }
-    fillGrad.Parent = fill
-
-    local thumb = Instance.new("Frame")
-    thumb.AnchorPoint      = Vector2.new(0.5, 0.5)
-    thumb.Size             = UDim2.fromOffset(16, 16)
-    thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    thumb.BorderSizePixel  = 0
-    thumb.ZIndex           = 2
-    thumb.Parent           = slider
-    Instance.new("UICorner", thumb).CornerRadius = UDim.new(1, 0)
-
-    local function update(value, fire)
-        Settings[key] = math.clamp(math.floor(value + 0.5), min, max)
+    local function update(v, fire)
+        Settings[key] = math.clamp(math.floor(v + 0.5), min, max)
         local pct = (Settings[key] - min) / (max - min)
-        fill.Size      = UDim2.new(pct, 0, 1, 0)
-        thumb.Position = UDim2.new(pct, 0, 0.5, 0)
-        label.Text     = text
-        valueTag.Text  = tostring(Settings[key]) .. "%"
+        fill.Size    = UDim2.new(pct, 0, 1, 0)
+        value.Text   = tostring(Settings[key])
         if fire and onChange then onChange(Settings[key]) end
     end
 
     local sliding = false
-
     local function setFromX(x)
-        local w = slider.AbsoluteSize.X
+        local w = track.AbsoluteSize.X
         if w <= 0 then return end
-        local pct = math.clamp((x - slider.AbsolutePosition.X) / w, 0, 1)
+        local pct = math.clamp((x - track.AbsolutePosition.X) / w, 0, 1)
         update(min + pct * (max - min), true)
     end
 
-    slider.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
             sliding = true
-            setFromX(input.Position.X)
+            setFromX(i.Position.X)
         end
     end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if sliding and (
-            input.UserInputType == Enum.UserInputType.MouseMovement
-            or input.UserInputType == Enum.UserInputType.Touch
-        ) then
-            setFromX(input.Position.X)
+    UserInputService.InputChanged:Connect(function(i)
+        if sliding and (i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(i.Position.X)
         end
     end)
-
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
             sliding = false
         end
     end)
@@ -523,71 +447,118 @@ local function addSlider(text, key, min, max, onChange)
     update(Settings[key], false)
 end
 
-local function addInfo(text)
-    local info = Instance.new("TextLabel")
-    info.Size             = UDim2.new(1, -4, 0, 44)
-    info.BackgroundColor3 = RowColor
-    info.TextColor3       = TextDim
-    info.TextWrapped      = true
-    info.TextSize         = 11
-    info.Font             = Enum.Font.Gotham
-    info.Text             = text
-    info.Parent           = content
-    Instance.new("UICorner", info).CornerRadius = UDim.new(0, 8)
-end
+-- ===== Dropdown row (Aim Target) =====
+local aimTargetOptions = {"Head", "Neck", "Chest", "Random"}
+local function addDropdown(name, key)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, -6, 0, 42)
+    row.BackgroundColor3 = Row
+    row.BorderSizePixel  = 0
+    row.Parent           = content
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
 
-local function addAction(text, fn)
+    local label = Instance.new("TextLabel")
+    label.Position               = UDim2.fromOffset(14, 0)
+    label.Size                   = UDim2.new(1, -80, 1, 0)
+    label.BackgroundTransparency = 1
+    label.Text                   = name
+    label.TextColor3             = TxtHi
+    label.TextSize               = 13
+    label.Font                   = Enum.Font.GothamMedium
+    label.TextXAlignment         = Enum.TextXAlignment.Left
+    label.Parent                 = row
+
     local btn = Instance.new("TextButton")
-    btn.Size             = UDim2.new(1, -4, 0, 40)
-    btn.BackgroundColor3 = PurpleDeep
-    btn.Text             = text
-    btn.TextColor3       = TextColor
-    btn.TextSize         = 13
+    btn.AnchorPoint      = Vector2.new(1, 0.5)
+    btn.Position         = UDim2.new(1, -14, 0.5, 0)
+    btn.Size             = UDim2.fromOffset(28, 28)
+    btn.BackgroundColor3 = RowAlt
+    btn.Text             = "≡"
+    btn.TextColor3       = TxtDim
+    btn.TextSize         = 15
     btn.Font             = Enum.Font.GothamBold
     btn.BorderSizePixel  = 0
-    btn.AutoButtonColor  = true
-    btn.Parent           = content
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
-    btn.Activated:Connect(fn)
-end
+    btn.AutoButtonColor  = false
+    btn.Parent           = row
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
 
--- ===== Pages =====
-local function showCombat()
-    clearContent()
-    addToggle("Aimbot", "AimEnabled", function() updateFovCircle() end)
-    addSlider("FOV Size", "FOV", 1, 100, function() updateFovCircle() end)
-    addToggle("Show FOV Circle", "ShowFov", function() updateFovCircle() end)
-    addToggle("Wall Check", "WallCheck")
-    addToggle("Kill Check", "KillCheck")
-    addToggle("Team Check", "TeamCheck")
-    addSlider("Aim Sensitivity", "Sensitivity", 1, 100)
-end
+    local idx = 1
+    for i, v in ipairs(aimTargetOptions) do
+        if v == Settings[key] then idx = i end
+    end
 
-local function showMisc()
-    clearContent()
-    addToggle("God Mode", "GodMode")
-    addToggle("Infinite Ammo", "InfiniteAmmo")
-    addToggle("No Reload", "NoReload")
-    addAction("Copy Discord Link", function()
-        local ok = pcall(function() setclipboard(Settings.DiscordLink) end)
-        print(ok and "Copied: " .. Settings.DiscordLink or Settings.DiscordLink)
+    btn.Activated:Connect(function()
+        idx = (idx % #aimTargetOptions) + 1
+        Settings[key] = aimTargetOptions[idx]
+        label.Text = name .. "  ·  " .. Settings[key]
     end)
-    addInfo("UI + FOV demo. Gameplay hooks are stubs — wire them to your own logic.")
+    label.Text = name .. "  ·  " .. Settings[key]
 end
 
--- ===== Wire tabs =====
-local combatTab = makeTab("Combat")
-local miscTab   = makeTab("Misc")
+-- ===== Build page =====
+divider()
+addToggle("Aimbot", "Enable soft aimbot", "AimEnabled", function() updateFov() end)
+divider()
+addToggle("Show FOV", "Draw FOV circle", "ShowFov", function() updateFov() end)
+divider()
+addToggle("God Mode", "Immune to death", "GodMode")
+divider()
+addSlider("Aim Strength", "AimStrength", 1, 100)
+divider()
+addSlider("FOV Size", "FOV", 1, 100, function() updateFov() end)
+divider()
+addDropdown("Aim Target", "AimTarget")
 
-combatTab.Activated:Connect(function()
-    setActiveTab("Combat"); showCombat()
+-- ===== Footer bar =====
+local footer = Instance.new("Frame")
+footer.AnchorPoint      = Vector2.new(0.5, 1)
+footer.Position         = UDim2.new(0.5, 0, 1, -10)
+footer.Size             = UDim2.new(1, -20, 0, 28)
+footer.BackgroundColor3 = Row
+footer.BorderSizePixel  = 0
+footer.Parent           = main
+Instance.new("UICorner", footer).CornerRadius = UDim.new(1, 0)
+
+local footerText = Instance.new("TextLabel")
+footerText.Position               = UDim2.fromOffset(14, 0)
+footerText.Size                   = UDim2.new(1, -56, 1, 0)
+footerText.BackgroundTransparency = 1
+footerText.Text                   = "mds  |  FPS: --  |  PING: --"
+footerText.TextColor3             = Accent
+footerText.TextSize               = 12
+footerText.Font                   = Enum.Font.GothamMedium
+footerText.TextXAlignment         = Enum.TextXAlignment.Left
+footerText.Parent                 = footer
+
+local footerIcon = Instance.new("TextLabel")
+footerIcon.AnchorPoint         = Vector2.new(1, 0.5)
+footerIcon.Pocon.BackgroundTransparency = 1
+footerIcon.Text                = "≡"
+footerIcon.TextColor3          = TxtDim
+footerIcon.TextSize            = 15
+footerIcon.Font                = Enum.Font.GothamBold
+footerIcon.Parent              = footer
+
+-- ===== Live FPS / PING =====
+local smoothedFps = 60
+RunService.RenderStepped:Connect(function(dt)
+    if dt > 0 then smoothedFps = smoothedFps * 0.9 + (1 / dt) * 0.1 end
 end)
-miscTab.Activated:Connect(function()
-    setActiveTab("Misc"); showMisc()
+
+task.spawn(function()
+    while gui.Parent do
+        local pingMs = 0
+        local ok = pcall(function()
+            pingMs = math.floor(player:GetNetworkPing() * 1000 + 0.5)
+        end)
+        footerText.Text = string.format(
+            "mds  |  FPS: %d  |  PING: %d",
+            math.floor(smoothedFps + 0.5),
+            pingMs
+        )
+        task.wait(0.5)
+    end
 end)
 
-setActiveTab("Combat")
-showCombat()
-updateFovCircle()
-
-print("[ShadowUI] loaded")
+updateFov()
+print("[MdsUI] loaded")
