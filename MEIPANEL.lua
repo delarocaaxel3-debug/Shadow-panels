@@ -43,7 +43,7 @@ local old = playerGui:FindFirstChild("MdsUI")
 if old then old:Destroy() end
 
 local gui = Instance.new("ScreenGui")
-gui.Name           = "MdsUI"
+gui.Name           = "MEIUI"
 gui.ResetOnSpawn   = false
 gui.IgnoreGuiInset = true
 gui.DisplayOrder   = 100
@@ -123,7 +123,7 @@ local title = Instance.new("TextLabel")
 title.Position               = UDim2.fromOffset(16, 12)
 title.Size                   = UDim2.new(1, -160, 0, 22)
 title.BackgroundTransparency = 1
-title.Text                   = "cheat by mds"
+title.Text                   = "cheat by MEI"
 title.TextColor3             = Accent
 title.TextSize               = 17
 title.Font                   = Enum.Font.GothamBold
@@ -242,7 +242,7 @@ floatStroke.Parent    = floatBtn
 local floatFallback = Instance.new("TextLabel")
 floatFallback.Size                   = UDim2.fromScale(1, 1)
 floatFallback.BackgroundTransparency = 1
-floatFallback.Text                   = "MDS"
+floatFallback.Text                   = "MEI"
 floatFallback.TextColor3             = Accent
 floatFallback.TextSize               = 14
 floatFallback.Font                   = Enum.Font.GothamBold
