@@ -9,41 +9,41 @@ local TweenService     = game:GetService("TweenService")
 local player    = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
--- ===== Palette (purple, original) =====
-local BG         = Color3.fromRGB(18, 11, 28)
-local Row        = Color3.fromRGB(32, 20, 48)
-local RowAlt     = Color3.fromRGB(44, 28, 68)
-local Accent     = Color3.fromRGB(145, 65, 220)
-local AccentSoft = Color3.fromRGB(185, 110, 255)
-local AccentDeep = Color3.fromRGB(72, 30, 120)
-local TxtHi      = Color3.fromRGB(245, 238, 255)
-local TxtDim     = Color3.fromRGB(160, 150, 185)
-local TxtFaint   = Color3.fromRGB(120, 112, 145)
-local Bad        = Color3.fromRGB(230, 70, 90)
-local Divider    = Color3.fromRGB(46, 30, 66)
+-- ===== Palette (purple) =====
+local BG          = Color3.fromRGB(16, 10, 26)
+local PanelBG     = Color3.fromRGB(22, 14, 34)
+local Row         = Color3.fromRGB(30, 19, 46)
+local RowOutline  = Color3.fromRGB(52, 34, 76)
+local Accent      = Color3.fromRGB(145, 65, 220)
+local AccentSoft  = Color3.fromRGB(185, 110, 255)
+local AccentDeep  = Color3.fromRGB(72, 30, 120)
+local TxtHi       = Color3.fromRGB(240, 234, 250)
+local TxtDim      = Color3.fromRGB(160, 150, 185)
+local TxtFaint    = Color3.fromRGB(115, 106, 140)
+local Bad         = Color3.fromRGB(230, 70, 90)
 
 -- ===== Asset (floater icon) =====
-local IMAGE_ID = "rbxassetid://0" -- << paste your decal id
+local IMAGE_ID = "rbxassetid://1234567890" -- << paste your decal id
 
 -- ===== Key system =====
 local KEY_LIST = {
     ["MEI-2027"]   = true,
     ["MEI-VIP"]    = true,
-    ["KABU-VIP"] = true,
+    ["KABU-KEY"] = true,
 }
 local KEY_FILE    = "MeiUI/key.txt"
 local DISCORD_URL = "https://discord.gg/CM9maT4GEa"
 
 -- ===== Settings =====
 local Settings = {
-    AimEnabled   = false,
-    ShowFov      = true,
-    GodMode      = false,
-    AimStrength  = 27,
-    FOV          = 7,
-    AimTarget    = "Head",
-    WallCheck    = true,
-    TeamCheck    = true,
+    AimEnabled  = false,
+    ShowFov     = true,
+    GodMode     = false,
+    AimStrength = 27,
+    FOV         = 7,
+    AimTarget   = "Head",
+    WallCheck   = true,
+    TeamCheck   = true,
 }
 
 -- ===== Wipe old =====
@@ -147,11 +147,8 @@ local function getTarget()
                 local hum = char:FindFirstChildOfClass("Humanoid")
                 if hum and hum.Health > 0 then
                     local skip = false
-                    if Settings.TeamCheck
-                    and player.Team and p.Team
-                    and player.Team == p.Team then
-                        skip = true
-                    end
+                    if Settings.TeamCheck and player.Team and p.Team
+                    and player.Team == p.Team then skip = true end
                     if not skip then
                         local part = pickBone(char)
                         if part and isVisible(part.Position, char) then
@@ -177,10 +174,8 @@ RunService:BindToRenderStep("MeiAimbot", Enum.RenderPriority.Camera.Value + 1, f
     local cam = workspace.CurrentCamera
     if not cam then return end
     if camera ~= cam then camera = cam end
-
     local target = getTarget()
     if not target then return end
-
     local camPos = cam.CFrame.Position
     local goal   = CFrame.new(camPos, target.Position)
     local alpha  = math.clamp(Settings.AimStrength / 100, 0.01, 1)
@@ -236,14 +231,18 @@ end
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCam)
 hookCam()
 
--- ===== Draggable =====
+-- =====================================================================
+-- DRAGGABLE (tap + drag for buttons, drag-only for headers)
+-- =====================================================================
 local function makeDraggable(frame, onTap)
     local dragging, dragStart, startPos, moved = false, nil, nil, false
+
     frame.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
         and input.UserInputType ~= Enum.UserInputType.Touch then return end
         dragging, dragStart, startPos, moved = true, input.Position, frame.Position, false
     end)
+
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType ~= Enum.UserInputType.MouseMovement
@@ -256,60 +255,67 @@ local function makeDraggable(frame, onTap)
                 startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
     end)
-    UserInputService.InputEnded:Connect(function(input)
+
+    local function release()
         if not dragging then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-        and input.UserInputType ~= Enum.UserInputType.Touch then return end
         dragging = false
         if not moved and onTap then onTap() end
+        moved = false
+    end
+
+    frame.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then release() end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then release() end
     end)
 end
 
 -- =====================================================================
--- FLOATING OPEN/CLOSE  (matches screenshot: rounded square + icon)
+-- FLOATING BUTTON (circular, top-left, drag + tap)
 -- =====================================================================
-local floater = Instance.new("Frame")
+local hasImg = (IMAGE_ID ~= "" and IMAGE_ID ~= "rbxassetid://0")
+
+local floater = Instance.new("ImageButton")
 floater.Name              = "Floater"
-floater.Size              = UDim2.fromOffset(46, 46)
+floater.Size              = UDim2.fromOffset(56, 56)
 floater.Position          = UDim2.new(0, 14, 0, 14)
 floater.BackgroundColor3  = BG
 floater.BorderSizePixel   = 0
+floater.AutoButtonColor   = false
+floater.Active            = true
+floater.Image             = hasImg and IMAGE_ID or ""
+floater.ScaleType         = Enum.ScaleType.Fit
 floater.ZIndex            = 60
 floater.Visible           = false
 floater.Parent            = gui
-Instance.new("UICorner", floater).CornerRadius = UDim.new(0, 11)
+Instance.new("UICorner", floater).CornerRadius = UDim.new(1, 0)
 
 local floaterStroke = Instance.new("UIStroke")
-floaterStroke.Color        = Accent
-floaterStroke.Thickness    = 1.8
-floaterStroke.Transparency = 0.1
+floaterStroke.Color        = AccentSoft
+floaterStroke.Thickness    = 2
+floaterStroke.Transparency = 0.05
 floaterStroke.Parent       = floater
 
--- outer glow ring (soft purple halo like the screenshot)
-local floaterGlow = Instance.new("Frame")
-floaterGlow.Name                   = "Glow"
-floaterGlow.AnchorPoint            = Vector2.new(0.5, 0.5)
-floaterGlow.Position               = UDim2.fromScale(0.5, 0.5)
-floaterGlow.Size                   = UDim2.fromScale(1.35, 1.35)
-floaterGlow.BackgroundColor3       = Accent
-floaterGlow.BackgroundTransparency = 0.85
-floaterGlow.BorderSizePixel        = 0
-floaterGlow.ZIndex                 = -1
-floaterGlow.Parent                 = floater
-Instance.new("UICorner", floaterGlow).CornerRadius = UDim.new(0, 14)
+-- soft inner ring (matches the double-ring in the ss)
+local floaterInner = Instance.new("Frame")
+floaterInner.AnchorPoint            = Vector2.new(0.5, 0.5)
+floaterInner.Position               = UDim2.fromScale(0.5, 0.5)
+floaterInner.Size                   = UDim2.fromScale(0.86, 0.86)
+floaterInner.BackgroundTransparency = 1
+floaterInner.Active                 = false
+floaterInner.ZIndex                 = 61
+floaterInner.Parent                 = floater
+Instance.new("UICorner", floaterInner).CornerRadius = UDim.new(1, 0)
 
-local floaterImg = Instance.new("ImageLabel")
-floaterImg.Name                   = "Icon"
-floaterImg.AnchorPoint            = Vector2.new(0.5, 0.5)
-floaterImg.Position               = UDim2.fromScale(0.5, 0.5)
-floaterImg.Size                   = UDim2.fromScale(0.72, 0.72)
-floaterImg.BackgroundTransparency = 1
-floaterImg.Image                  = IMAGE_ID
-floaterImg.ScaleType              = Enum.ScaleType.Fit
-floaterImg.ZIndex                 = 61
-floaterImg.Parent                 = floater
+local innerStroke = Instance.new("UIStroke")
+innerStroke.Color        = Accent
+innerStroke.Thickness    = 1
+innerStroke.Transparency = 0.5
+innerStroke.Parent       = floaterInner
 
--- fallback "MEI" text if no image set
 local floaterFallback = Instance.new("TextLabel")
 floaterFallback.AnchorPoint            = Vector2.new(0.5, 0.5)
 floaterFallback.Position               = UDim2.fromScale(0.5, 0.5)
@@ -317,24 +323,21 @@ floaterFallback.Size                   = UDim2.fromScale(1, 1)
 floaterFallback.BackgroundTransparency = 1
 floaterFallback.Text                   = "MEI"
 floaterFallback.TextColor3             = AccentSoft
-floaterFallback.TextSize               = 13
+floaterFallback.TextSize               = 14
 floaterFallback.Font                   = Enum.Font.GothamBold
-floaterFallback.ZIndex                 = 61
+floaterFallback.Active                 = false
+floaterFallback.ZIndex                 = 62
 floaterFallback.Parent                 = floater
-floaterFallback.Visible = (IMAGE_ID == "" or IMAGE_ID == "rbxassetid://0")
+floaterFallback.Visible = not hasImg
 
 local function togglePanel()
     main.Visible = not main.Visible
-
-    local targetColor = main.Visible and Accent or AccentDeep
     TweenService:Create(floaterStroke, TweenInfo.new(0.15), {
-        Color = targetColor,
+        Color = main.Visible and AccentSoft or AccentDeep,
     }):Play()
-
-    -- small press pop
-    floater.Size = UDim2.fromOffset(42, 42)
+    floater.Size = UDim2.fromOffset(50, 50)
     TweenService:Create(floater, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(46, 46),
+        Size = UDim2.fromOffset(56, 56),
     }):Play()
 end
 
@@ -347,16 +350,16 @@ local keyFrame = Instance.new("Frame")
 keyFrame.Name             = "KeyGate"
 keyFrame.Size             = UDim2.fromOffset(320, 290)
 keyFrame.Position         = UDim2.new(0.5, -160, 0.5, -145)
-keyFrame.BackgroundColor3 = BG
+keyFrame.BackgroundColor3 = PanelBG
 keyFrame.BorderSizePixel  = 0
 keyFrame.ZIndex           = 50
 keyFrame.Parent           = gui
 Instance.new("UICorner", keyFrame).CornerRadius = UDim.new(0, 12)
 
 local keyStroke = Instance.new("UIStroke")
-keyStroke.Color        = Accent
-keyStroke.Thickness    = 1.4
-keyStroke.Transparency = 0.25
+keyStroke.Color        = RowOutline
+keyStroke.Thickness    = 1
+keyStroke.Transparency = 0.1
 keyStroke.Parent       = keyFrame
 
 local keyHeader = Instance.new("Frame")
@@ -380,7 +383,7 @@ keyTitle.Position               = UDim2.fromOffset(16, 0)
 keyTitle.Size                   = UDim2.new(1, -32, 1, 0)
 keyTitle.BackgroundTransparency = 1
 keyTitle.Text                   = "MEI  ·  KEY SYSTEM"
-keyTitle.TextColor3             = Accent
+keyTitle.TextColor3             = AccentSoft
 keyTitle.TextSize               = 14
 keyTitle.Font                   = Enum.Font.GothamBold
 keyTitle.TextXAlignment         = Enum.TextXAlignment.Left
@@ -423,9 +426,9 @@ keyBoxPad.PaddingRight = UDim.new(0, 12)
 keyBoxPad.Parent       = keyBox
 
 local keyBoxStroke = Instance.new("UIStroke")
-keyBoxStroke.Color        = AccentDeep
+keyBoxStroke.Color        = RowOutline
 keyBoxStroke.Thickness    = 1
-keyBoxStroke.Transparency = 0.3
+keyBoxStroke.Transparency = 0.1
 keyBoxStroke.Parent       = keyBox
 
 local keyErr = Instance.new("TextLabel")
@@ -463,7 +466,7 @@ submitStroke.Parent       = submitBtn
 local getKeyBtn = Instance.new("TextButton")
 getKeyBtn.Position         = UDim2.fromOffset(20, 202)
 getKeyBtn.Size             = UDim2.new(1, -40, 0, 38)
-getKeyBtn.BackgroundColor3 = RowAlt
+getKeyBtn.BackgroundColor3 = Row
 getKeyBtn.Text             = "GET KEY  ·  DISCORD"
 getKeyBtn.TextColor3       = AccentSoft
 getKeyBtn.TextSize         = 12
@@ -475,22 +478,10 @@ getKeyBtn.Parent           = keyFrame
 Instance.new("UICorner", getKeyBtn).CornerRadius = UDim.new(0, 8)
 
 local getKeyStroke = Instance.new("UIStroke")
-getKeyStroke.Color        = AccentDeep
+getKeyStroke.Color        = RowOutline
 getKeyStroke.Thickness    = 1
-getKeyStroke.Transparency = 0.3
+getKeyStroke.Transparency = 0.1
 getKeyStroke.Parent       = getKeyBtn
-
-local keyHint = Instance.new("TextLabel")
-keyHint.Position               = UDim2.fromOffset(20, 246)
-keyHint.Size                   = UDim2.new(1, -40, 0, 14)
-keyHint.BackgroundTransparency = 1
-keyHint.Text                   = "tap to copy link  ·  enter key to unlock"
-keyHint.TextColor3             = TxtFaint
-keyHint.TextSize               = 9
-keyHint.Font                   = Enum.Font.Gotham
-keyHint.TextXAlignment         = Enum.TextXAlignment.Center
-keyHint.ZIndex                 = 52
-keyHint.Parent                 = keyFrame
 
 makeDraggable(keyHeader)
 makeDraggable(keyFrame)
@@ -500,9 +491,9 @@ makeDraggable(keyFrame)
 -- =====================================================================
 local main = Instance.new("Frame")
 main.Name             = "Main"
-main.Size             = UDim2.fromOffset(340, 400)
-main.Position         = UDim2.new(0.5, -170, 0.5, -200)
-main.BackgroundColor3 = BG
+main.Size             = UDim2.fromOffset(360, 420)
+main.Position         = UDim2.new(0.5, -180, 0.5, -210)
+main.BackgroundColor3 = PanelBG
 main.BorderSizePixel  = 0
 main.ClipsDescendants = true
 main.Visible          = false
@@ -510,32 +501,32 @@ main.Parent           = gui
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local mainStroke = Instance.new("UIStroke")
-mainStroke.Color        = AccentDeep
+mainStroke.Color        = RowOutline
 mainStroke.Thickness    = 1
-mainStroke.Transparency = 0.35
+mainStroke.Transparency = 0.1
 mainStroke.Parent       = main
 
 -- ===== Header =====
 local header = Instance.new("Frame")
 header.Name                   = "Header"
-header.Size                   = UDim2.new(1, 0, 0, 52)
+header.Size                   = UDim2.new(1, 0, 0, 54)
 header.BackgroundTransparency = 1
 header.Parent                 = main
 
 local title = Instance.new("TextLabel")
-title.Position               = UDim2.fromOffset(14, 8)
-title.Size                   = UDim2.new(1, -110, 0, 18)
+title.Position               = UDim2.fromOffset(16, 8)
+title.Size                   = UDim2.new(1, -140, 0, 18)
 title.BackgroundTransparency = 1
-title.Text                   = "MEI"
-title.TextColor3             = Accent
-title.TextSize               = 15
+title.Text                   = "cheat by MEI"
+title.TextColor3             = AccentSoft
+title.TextSize               = 14
 title.Font                   = Enum.Font.GothamBold
 title.TextXAlignment         = Enum.TextXAlignment.Left
 title.Parent                 = header
 
 local sub = Instance.new("TextLabel")
-sub.Position               = UDim2.fromOffset(14, 27)
-sub.Size                   = UDim2.new(1, -110, 0, 12)
+sub.Position               = UDim2.fromOffset(16, 26)
+sub.Size                   = UDim2.new(1, -140, 0, 12)
 sub.BackgroundTransparency = 1
 sub.Text                   = "by MEI"
 sub.TextColor3             = TxtFaint
@@ -546,11 +537,11 @@ sub.Parent                 = header
 
 local expiresLbl = Instance.new("TextLabel")
 expiresLbl.AnchorPoint            = Vector2.new(1, 0)
-expiresLbl.Position               = UDim2.new(1, -50, 0, 8)
-expiresLbl.Size                   = UDim2.fromOffset(100, 13)
+expiresLbl.Position               = UDim2.new(1, -58, 0, 10)
+expiresLbl.Size                   = UDim2.fromOffset(110, 13)
 expiresLbl.BackgroundTransparency = 1
 expiresLbl.Text                   = "Expires at"
-expiresLbl.TextColor3             = Accent
+expiresLbl.TextColor3             = AccentSoft
 expiresLbl.TextSize               = 10
 expiresLbl.Font                   = Enum.Font.GothamBold
 expiresLbl.TextXAlignment         = Enum.TextXAlignment.Right
@@ -558,8 +549,8 @@ expiresLbl.Parent                 = header
 
 local expiresVal = Instance.new("TextLabel")
 expiresVal.AnchorPoint            = Vector2.new(1, 0)
-expiresVal.Position               = UDim2.new(1, -50, 0, 23)
-expiresVal.Size                   = UDim2.fromOffset(100, 13)
+expiresVal.Position               = UDim2.new(1, -58, 0, 26)
+expiresVal.Size                   = UDim2.fromOffset(110, 13)
 expiresVal.BackgroundTransparency = 1
 expiresVal.Text                   = "Unlimited"
 expiresVal.TextColor3             = TxtDim
@@ -568,36 +559,37 @@ expiresVal.Font                   = Enum.Font.Gotham
 expiresVal.TextXAlignment         = Enum.TextXAlignment.Right
 expiresVal.Parent                 = header
 
+-- circular badge far right (matches ss)
 local headerBadge = Instance.new("Frame")
 headerBadge.AnchorPoint      = Vector2.new(1, 0.5)
-headerBadge.Position         = UDim2.new(1, -14, 0, 26)
-headerBadge.Size             = UDim2.fromOffset(24, 24)
+headerBadge.Position         = UDim2.new(1, -14, 0, 27)
+headerBadge.Size             = UDim2.fromOffset(28, 28)
 headerBadge.BackgroundColor3 = BG
 headerBadge.BorderSizePixel  = 0
 headerBadge.Parent           = header
 Instance.new("UICorner", headerBadge).CornerRadius = UDim.new(1, 0)
 
 local badgeStroke = Instance.new("UIStroke")
-badgeStroke.Color        = Accent
+badgeStroke.Color        = AccentSoft
 badgeStroke.Thickness    = 1.8
-badgeStroke.Transparency = 0.15
+badgeStroke.Transparency = 0.1
 badgeStroke.Parent       = headerBadge
 
 local badgeDot = Instance.new("Frame")
 badgeDot.AnchorPoint      = Vector2.new(0.5, 0.5)
 badgeDot.Position         = UDim2.fromScale(0.5, 0.5)
-badgeDot.Size             = UDim2.fromOffset(8, 8)
+badgeDot.Size             = UDim2.fromOffset(10, 10)
 badgeDot.BackgroundColor3 = Accent
 badgeDot.BorderSizePixel  = 0
 badgeDot.Parent           = headerBadge
 Instance.new("UICorner", badgeDot).CornerRadius = UDim.new(1, 0)
 
-makeDraggable(header)
+makeDraggable(header)  -- drag panel by header
 
 -- ===== Content =====
 local content = Instance.new("ScrollingFrame")
-content.Position               = UDim2.fromOffset(8, 54)
-content.Size                   = UDim2.new(1, -16, 1, -84)
+content.Position               = UDim2.fromOffset(0, 54)
+content.Size                   = UDim2.new(1, 0, 1, -84)
 content.BackgroundTransparency = 1
 content.BorderSizePixel        = 0
 content.ScrollBarThickness     = 3
@@ -607,40 +599,56 @@ content.CanvasSize             = UDim2.new(0, 0, 0, 0)
 content.Parent                 = main
 
 local list = Instance.new("UIListLayout")
-list.Padding   = UDim.new(0, 4)
+list.Padding   = UDim.new(0, 0)
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Parent    = content
 
-local function divider()
-    local d = Instance.new("Frame")
-    d.Size             = UDim2.new(1, -8, 0, 1)
-    d.BackgroundColor3 = Divider
-    d.BorderSizePixel  = 0
-    d.Parent           = content
+local function addSection(text)
+    local section = Instance.new("TextLabel")
+    section.Size                   = UDim2.new(1, -28, 0, 32)
+    section.Position               = UDim2.fromOffset(14, 0)
+    section.BackgroundTransparency = 1
+    section.Text                   = text
+    section.TextColor3             = TxtHi
+    section.TextSize               = 14
+    section.Font                   = Enum.Font.GothamBold
+    section.TextXAlignment         = Enum.TextXAlignment.Left
+    section.Parent                 = content
+
+    local pad = Instance.new("UIPadding")
+    pad.PaddingTop = UDim.new(0, 10)
+    pad.Parent = section
 end
 
-local function addToggle(name, desc, key, onChange)
+local function addRow(name, desc, key, onChange)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 40)
+    row.Size             = UDim2.new(1, -20, 0, 48)
+    row.Position         = UDim2.fromOffset(10, 0)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
 
+    local stroke = Instance.new("UIStroke")
+    stroke.Color        = RowOutline
+    stroke.Thickness    = 1
+    stroke.Transparency = 0.5
+    stroke.Parent       = row
+
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(12, 5)
-    label.Size                   = UDim2.new(1, -60, 0, 15)
+    label.Position               = UDim2.fromOffset(12, 6)
+    label.Size                   = UDim2.new(1, -60, 0, 16)
     label.BackgroundTransparency = 1
     label.Text                   = name
-    label.TextColor3             = Settings[key] and Accent or TxtHi
+    label.TextColor3             = Settings[key] and AccentSoft or TxtDim
     label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
     local descLbl = Instance.new("TextLabel")
-    descLbl.Position               = UDim2.fromOffset(12, 21)
-    descLbl.Size                   = UDim2.new(1, -60, 0, 12)
+    descLbl.Position               = UDim2.fromOffset(12, 24)
+    descLbl.Size                   = UDim2.new(1, -60, 0, 14)
     descLbl.BackgroundTransparency = 1
     descLbl.Text                   = desc or ""
     descLbl.TextColor3             = TxtFaint
@@ -652,37 +660,37 @@ local function addToggle(name, desc, key, onChange)
     local check = Instance.new("TextButton")
     check.AnchorPoint      = Vector2.new(1, 0.5)
     check.Position         = UDim2.new(1, -10, 0.5, 0)
-    check.Size             = UDim2.fromOffset(24, 24)
+    check.Size             = UDim2.fromOffset(28, 28)
     check.BackgroundColor3 = Settings[key] and Accent or BG
     check.Text             = Settings[key] and "✓" or ""
     check.TextColor3       = Color3.fromRGB(255, 255, 255)
-    check.TextSize         = 14
+    check.TextSize         = 15
     check.Font             = Enum.Font.GothamBold
     check.BorderSizePixel  = 0
     check.AutoButtonColor  = false
-    check.ZIndex           = 2
+    check.ZIndex           = 3
     check.Parent           = row
     Instance.new("UICorner", check).CornerRadius = UDim.new(0, 7)
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Color        = Settings[key] and AccentSoft or Color3.fromRGB(60, 42, 84)
-    stroke.Thickness    = 1
-    stroke.Transparency = 0.2
-    stroke.Parent       = check
+    local checkStroke = Instance.new("UIStroke")
+    checkStroke.Color        = Settings[key] and AccentSoft or RowOutline
+    checkStroke.Thickness    = 1
+    checkStroke.Transparency = 0.1
+    checkStroke.Parent       = check
 
     local hit = Instance.new("TextButton")
     hit.Size                   = UDim2.new(1, 0, 1, 0)
     hit.BackgroundTransparency = 1
     hit.Text                   = ""
-    hit.ZIndex                 = 3
+    hit.ZIndex                 = 2
     hit.Parent                 = row
 
     local function refresh(anim)
         local on   = Settings[key]
         local info = anim and TweenInfo.new(0.13, Enum.EasingStyle.Quad) or TweenInfo.new(0)
         TweenService:Create(check, info, { BackgroundColor3 = on and Accent or BG }):Play()
-        TweenService:Create(stroke, info, { Color = on and AccentSoft or Color3.fromRGB(60, 42, 84) }):Play()
-        TweenService:Create(label, info, { TextColor3 = on and Accent or TxtHi }):Play()
+        TweenService:Create(checkStroke, info, { Color = on and AccentSoft or RowOutline }):Play()
+        TweenService:Create(label, info, { TextColor3 = on and AccentSoft or TxtDim }):Play()
         check.Text = on and "✓" or ""
     end
 
@@ -695,18 +703,25 @@ end
 
 local function addSlider(name, key, min, max, onChange)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 40)
+    row.Size             = UDim2.new(1, -20, 0, 46)
+    row.Position         = UDim2.fromOffset(10, 0)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color        = RowOutline
+    stroke.Thickness    = 1
+    stroke.Transparency = 0.5
+    stroke.Parent       = row
 
     local label = Instance.new("TextLabel")
     label.Position               = UDim2.fromOffset(12, 6)
-    label.Size                   = UDim2.new(1, -60, 0, 14)
+    label.Size                   = UDim2.new(1, -60, 0, 15)
     label.BackgroundTransparency = 1
     label.Text                   = name
-    label.TextColor3             = TxtHi
+    label.TextColor3             = TxtDim
     label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
@@ -715,7 +730,7 @@ local function addSlider(name, key, min, max, onChange)
     local value = Instance.new("TextLabel")
     value.AnchorPoint            = Vector2.new(1, 0)
     value.Position               = UDim2.new(1, -12, 0, 6)
-    value.Size                   = UDim2.fromOffset(50, 14)
+    value.Size                   = UDim2.fromOffset(50, 15)
     value.BackgroundTransparency = 1
     value.TextColor3             = TxtDim
     value.TextSize               = 11
@@ -726,105 +741,13 @@ local function addSlider(name, key, min, max, onChange)
     local track = Instance.new("TextButton")
     track.Position         = UDim2.fromOffset(12, 26)
     track.Size             = UDim2.new(1, -24, 0, 4)
-    track.BackgroundColor3 = Color3.fromRGB(58, 40, 82)
+    track.BackgroundColor3 = Color3.fromRGB(54, 36, 78)
     track.Text             = ""
     track.AutoButtonColor  = false
-    track.ZIndex           = 2
+    track.ZIndex           = 3
     track.Parent           = row
     Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = Accent
-    fill.BorderSizePixel  = 0
-    fill.Parent           = track
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local function update(v, fire)
-        Settings[key] = math.clamp(math.floor(v + 0.5), min, max)
-        local pct = (Settings[key] - min) / (max - min)
-        fill.Size  = UDim2.new(pct, 0, 1, 0)
-        value.Text = tostring(Settings[key])
-        if fire and onChange then onChange(Settings[key]) end
-    end
-
-    local sliding = false
-    local function setFromX(x)
-        local w = track.AbsoluteSize.X
-        if w <= 0 then return end
-        local pct = math.clamp((x - track.AbsolutePosition.X) / w, 0, 1)
-        update(min + pct * (max - min), true)
-    end
-
-    track.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1
-        or i.UserInputType == Enum.UserInputType.Touch then
-            sliding = true
-            setFromX(i.Position.X)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(i)
-        if sliding and (i.UserInputType == Enum.UserInputType.MouseMovement
-        or i.UserInputType == Enum.UserInputType.Touch) then
-            setFromX(i.Position.X)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1
-        or i.UserInputType == Enum.UserInputType.Touch then
-            sliding = false
-        end
-    end)
-
-    update(Settings[key], false)
-end
-
-local aimTargetOptions = {"Head", "Neck", "Chest", "Random"}
-local function addDropdown(name, key)
-    local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 40)
-    row.BackgroundColor3 = Row
-    row.BorderSizePixel  = 0
-    row.Parent           = content
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
-
-    local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(12, 5)
-    label.Size                   = UDim2.new(1, -50, 0, 15)
-    label.BackgroundTransparency = 1
-    label.Text                   = name
-    label.TextColor3             = TxtHi
-    label.TextSize               = 12
-    label.Font                   = Enum.Font.GothamMedium
-    label.TextXAlignment         = Enum.TextXAlignment.Left
-    label.Parent                 = row
     
-    local value = Instance.new("TextLabel")
-    value.AnchorPoint            = Vector2.new(1, 0)
-    value.Position               = UDim2.new(1, -12, 0, 6)
-    value.Size                   = UDim2.fromOffset(50, 14)
-    value.BackgroundTransparency = 1
-    value.TextColor3             = TxtDim
-    value.TextSize               = 11
-    value.Font                   = Enum.Font.Gotham
-    value.TextXAlignment         = Enum.TextXAlignment.Right
-    value.Parent                 = row
-
-    local track = Instance.new("TextButton")
-    track.Position         = UDim2.fromOffset(12, 26)
-    track.Size             = UDim2.new(1, -24, 0, 4)
-    track.BackgroundColor3 = Color3.fromRGB(58, 40, 82)
-    track.Text             = ""
-    track.AutoButtonColor  = false
-    track.ZIndex           = 2
-    track.Parent           = row
-    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame")
-    fill.BackgroundColor3 = Accent
-    fill.BorderSizePixel  = 0
-    fill.Parent           = track
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
     local function update(v, fire)
         Settings[key] = math.clamp(math.floor(v + 0.5), min, max)
         local pct = (Settings[key] - min) / (max - min)
@@ -867,29 +790,36 @@ end
 local aimTargetOptions = {"Head", "Neck", "Chest", "Random"}
 local function addDropdown(name, key)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 40)
+    row.Size             = UDim2.new(1, -20, 0, 46)
+    row.Position         = UDim2.fromOffset(10, 0)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
     Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
 
+    local stroke = Instance.new("UIStroke")
+    stroke.Color        = RowOutline
+    stroke.Thickness    = 1
+    stroke.Transparency = 0.5
+    stroke.Parent       = row
+
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(12, 5)
+    label.Position               = UDim2.fromOffset(12, 6)
     label.Size                   = UDim2.new(1, -50, 0, 15)
     label.BackgroundTransparency = 1
     label.Text                   = name
-    label.TextColor3             = TxtHi
+    label.TextColor3             = TxtDim
     label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
     local valueLbl = Instance.new("TextLabel")
-    valueLbl.Position               = UDim2.fromOffset(12, 21)
-    valueLbl.Size                   = UDim2.new(1, -50, 0, 13)
+    valueLbl.Position               = UDim2.fromOffset(12, 24)
+    valueLbl.Size                   = UDim2.new(1, -50, 0, 14)
     valueLbl.BackgroundTransparency = 1
     valueLbl.Text                   = Settings[key]
-    valueLbl.TextColor3             = TxtDim
+    valueLbl.TextColor3             = TxtFaint
     valueLbl.TextSize               = 10
     valueLbl.Font                   = Enum.Font.Gotham
     valueLbl.TextXAlignment         = Enum.TextXAlignment.Left
@@ -898,22 +828,22 @@ local function addDropdown(name, key)
     local btn = Instance.new("TextButton")
     btn.AnchorPoint      = Vector2.new(1, 0.5)
     btn.Position         = UDim2.new(1, -10, 0.5, 0)
-    btn.Size             = UDim2.fromOffset(24, 24)
+    btn.Size             = UDim2.fromOffset(28, 28)
     btn.BackgroundColor3 = BG
     btn.Text             = "≡"
     btn.TextColor3       = TxtDim
-    btn.TextSize         = 14
+    btn.TextSize         = 15
     btn.Font             = Enum.Font.GothamBold
     btn.BorderSizePixel  = 0
     btn.AutoButtonColor  = false
-    btn.ZIndex           = 2
+    btn.ZIndex           = 3
     btn.Parent           = row
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
 
     local btnStroke = Instance.new("UIStroke")
-    btnStroke.Color        = Color3.fromRGB(60, 42, 84)
+    btnStroke.Color        = RowOutline
     btnStroke.Thickness    = 1
-    btnStroke.Transparency = 0.2
+    btnStroke.Transparency = 0.1
     btnStroke.Parent       = btn
 
     local idx = 1
@@ -928,43 +858,45 @@ local function addDropdown(name, key)
     end)
 end
 
-divider()
-addToggle("Aimbot", "Enable soft aimbot", "AimEnabled", function() updateFov() end)
-divider()
-addToggle("Show FOV", "Draw FOV circle", "ShowFov", function() updateFov() end)
-divider()
-addToggle("God Mode", "Immune to death", "GodMode")
-divider()
+-- ===== Build page (matches screenshot order) =====
+addSection("Aimbot")
+addRow("Aimbot", "Enable soft aimbot", "AimEnabled", function() updateFov() end)
+addRow("Show FOV", "Draw FOV circle", "ShowFov", function() updateFov() end)
+addRow("God Mode", "Immune to death", "GodMode")
 addSlider("Aim Strength", "AimStrength", 1, 100)
-divider()
 addSlider("FOV Size", "FOV", 1, 100, function() updateFov() end)
-divider()
 addDropdown("Aim Target", "AimTarget")
 
--- ===== Footer =====
+-- ===== Footer (centered pill) =====
 local footer = Instance.new("Frame")
 footer.AnchorPoint      = Vector2.new(0.5, 1)
-footer.Position         = UDim2.new(0.5, 0, 1, -6)
-footer.Size             = UDim2.new(1, -16, 0, 22)
+footer.Position         = UDim2.new(0.5, 0, 1, -8)
+footer.Size             = UDim2.new(0, 240, 0, 24)
 footer.BackgroundColor3 = Row
 footer.BorderSizePixel  = 0
 footer.Parent           = main
 Instance.new("UICorner", footer).CornerRadius = UDim.new(1, 0)
 
+local footerStroke = Instance.new("UIStroke")
+footerStroke.Color        = RowOutline
+footerStroke.Thickness    = 1
+footerStroke.Transparency = 0.3
+footerStroke.Parent       = footer
+
 local footerText = Instance.new("TextLabel")
-footerText.Position               = UDim2.fromOffset(12, 0)
-footerText.Size                   = UDim2.new(1, -44, 1, 0)
+footerText.Position               = UDim2.fromOffset(14, 0)
+footerText.Size                   = UDim2.new(1, -42, 1, 0)
 footerText.BackgroundTransparency = 1
 footerText.Text                   = "MEI  |  FPS: --  |  PING: --"
-footerText.TextColor3             = Accent
+footerText.TextColor3             = AccentSoft
 footerText.TextSize               = 11
 footerText.Font                   = Enum.Font.GothamMedium
-footerText.TextXAlignment         = Enum.TextXAlignment.Left
+footerText.TextXAlignment         = Enum.TextXAlignment.Center
 footerText.Parent                 = footer
 
 local footerIcon = Instance.new("TextLabel")
 footerIcon.AnchorPoint            = Vector2.new(1, 0.5)
-footerIcon.Position               = UDim2.new(1, -8, 0.5, 0)
+footerIcon.Position               = UDim2.new(1, -10, 0.5, 0)
 footerIcon.Size                   = UDim2.fromOffset(18, 18)
 footerIcon.BackgroundTransparency = 1
 footerIcon.Text                   = "≡"
@@ -973,6 +905,7 @@ footerIcon.TextSize               = 14
 footerIcon.Font                   = Enum.Font.GothamBold
 footerIcon.Parent                 = footer
 
+-- ===== FPS/PING =====
 local smoothedFps = 60
 RunService.RenderStepped:Connect(function(dt)
     if dt > 0 then smoothedFps = smoothedFps * 0.9 + (1 / dt) * 0.1 end
@@ -1005,14 +938,14 @@ local function unlock()
     main.Visible    = true
     floater.Visible = true
 
-    main.Size = UDim2.fromOffset(300, 360)
+    main.Size = UDim2.fromOffset(320, 380)
     TweenService:Create(main, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(340, 400),
+        Size = UDim2.fromOffset(360, 420),
     }):Play()
 
-    floater.Size = UDim2.fromOffset(36, 36)
+    floater.Size = UDim2.fromOffset(44, 44)
     TweenService:Create(floater, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(46, 46),
+        Size = UDim2.fromOffset(56, 56),
     }):Play()
 end
 
@@ -1046,7 +979,7 @@ local function trySubmit()
         keyBoxStroke.Color = Bad
         shakeKeyFrame()
         task.wait(0.6)
-        keyBoxStroke.Color = AccentDeep
+        keyBoxStroke.Color = RowOutline
     end
 end
 
