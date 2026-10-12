@@ -1009,8 +1009,44 @@ else
     keyFrame.Visible = true
     main.Visible     = false
     floater.Visible  = false
-    task.defer(function() pcall(function() keyBox:CaptureFocus() end) end)
 end
+    -- reliable click binding across mobile executors
+local function bindClick(btn, fn)
+    local cool = false
+    local function fire()
+        if cool then return end
+        cool = true
+        task.wait(0.2)
+        cool = false
+    end
+    -- capture press immediately on touch (Activated / MouseButton1Click
+    -- are unreliable on some mobile executors)
+    btn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch
+        or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            fn()
+        end
+    end)
+    btn.MouseButton1Click:Connect(function()
+        if not cool then fn() end
+    end)
+end
+
+bindClick(submitBtn, trySubmit)
+
+bindClick(getKeyBtn, function()
+    local ok = pcall(function() setclipboard(DISCORD_URL) end)
+    if ok then
+        getKeyBtn.Text = "COPIED  ✓"
+        task.wait(1.2)
+        getKeyBtn.Text = "GET KEY  ·  DISCORD"
+    else
+        getKeyBtn.Text = "SEE CONSOLE"
+        print("[MeiUI] " .. DISCORD_URL)
+        task.wait(1.2)
+        getKeyBtn.Text = "GET KEY  ·  DISCORD"
+    end
+end)
 
 updateFov()
 print("[MeiUI] loaded")
