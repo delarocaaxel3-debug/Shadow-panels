@@ -1,5 +1,4 @@
--- MEI PANEL | PURPLE EDITION | KEY GATE
--- UI + FOV circle | Mobile + PC
+-- MEI PANEL | PURPLE EDITION | KEY GATE + AIMBOT
 -- LocalScript in StarterPlayerScripts
 
 local Players          = game:GetService("Players")
@@ -21,16 +20,16 @@ local TxtHi      = Color3.fromRGB(245, 238, 255)
 local TxtDim     = Color3.fromRGB(160, 150, 185)
 local TxtFaint   = Color3.fromRGB(120, 112, 145)
 local Bad        = Color3.fromRGB(230, 70, 90)
+local Divider    = Color3.fromRGB(46, 30, 66)
 
--- ===== Asset =====
+-- ===== Asset (floater icon) =====
 local IMAGE_ID = "rbxassetid://0" -- << paste your decal id
 
 -- ===== Key system =====
 local KEY_LIST = {
-    ["MEI-OFFICIAL"]   = true,
+    ["MEI-2027"]   = true,
     ["MEI-VIP"]    = true,
-    ["KABU-OFFICIAL"] = true,
-    -- add keys here
+    ["KABU-VIP"] = true,
 }
 local KEY_FILE    = "MeiUI/key.txt"
 local DISCORD_URL = "https://discord.gg/CM9maT4GEa"
@@ -43,11 +42,8 @@ local Settings = {
     AimStrength  = 27,
     FOV          = 7,
     AimTarget    = "Head",
-    InfiniteAmmo = false,
-    NoReload     = false,
     WallCheck    = true,
     TeamCheck    = true,
-    DiscordLink  = DISCORD_URL,
 }
 
 -- ===== Wipe old =====
@@ -75,9 +71,7 @@ local function loadSavedKey()
     local ok, data = pcall(function()
         if isfile(KEY_FILE) then return readfile(KEY_FILE) end
     end)
-    if ok and type(data) == "string" then
-        return (data:gsub("%s+", ""))
-    end
+    if ok and type(data) == "string" then return (data:gsub("%s+", "")) end
     return nil
 end
 
@@ -96,6 +90,103 @@ local function isValidKey(key)
     return KEY_LIST[key:upper()] == true
 end
 
+-- =====================================================================
+-- AIMBOT
+-- =====================================================================
+local camera = workspace.CurrentCamera
+
+local function getFovRadius()
+    local vp = camera.ViewportSize
+    return math.min(vp.X, vp.Y) * 0.5 * (Settings.FOV / 100)
+end
+
+local function isVisible(targetPos, targetChar)
+    if not Settings.WallCheck then return true end
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    local ignore = {}
+    if player.Character then table.insert(ignore, player.Character) end
+    if targetChar then table.insert(ignore, targetChar) end
+    params.FilterDescendantsInstances = ignore
+    local origin = camera.CFrame.Position
+    local dir    = targetPos - origin
+    local result = workspace:Raycast(origin, dir, params)
+    if result and result.Instance then
+        if targetChar and result.Instance:IsDescendantOf(targetChar) then
+            return true
+        end
+        return false
+    end
+    return true
+end
+
+local function pickBone(char)
+    local name = Settings.AimTarget
+    if name == "Random" then
+        local pool = {"Head", "UpperTorso", "Torso", "HumanoidRootPart"}
+        name = pool[math.random(1, #pool)]
+    end
+    local map = { Head = "Head", Neck = "Neck", Chest = "UpperTorso" }
+    local partName = map[name] or "Head"
+    local part = char:FindFirstChild(partName)
+    if not part then part = char:FindFirstChild("Torso") end
+    if not part then part = char:FindFirstChild("HumanoidRootPart") end
+    return part
+end
+
+local function getTarget()
+    local vp     = camera.ViewportSize
+    local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+    local maxR   = getFovRadius()
+    local bestPart, bestDist = nil, maxR
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= player then
+            local char = p.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.Health > 0 then
+                    local skip = false
+                    if Settings.TeamCheck
+                    and player.Team and p.Team
+                    and player.Team == p.Team then
+                        skip = true
+                    end
+                    if not skip then
+                        local part = pickBone(char)
+                        if part and isVisible(part.Position, char) then
+                            local sp, onScreen = camera:WorldToViewportPoint(part.Position)
+                            if onScreen and sp.Z > 0 then
+                                local d = (Vector2.new(sp.X, sp.Y) - center).Magnitude
+                                if d < bestDist then
+                                    bestPart = part
+                                    bestDist = d
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return bestPart
+end
+
+RunService:BindToRenderStep("MeiAimbot", Enum.RenderPriority.Camera.Value + 1, function()
+    if not Settings.AimEnabled then return end
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+    if camera ~= cam then camera = cam end
+
+    local target = getTarget()
+    if not target then return end
+
+    local camPos = cam.CFrame.Position
+    local goal   = CFrame.new(camPos, target.Position)
+    local alpha  = math.clamp(Settings.AimStrength / 100, 0.01, 1)
+    cam.CFrame   = cam.CFrame:Lerp(goal, alpha)
+end)
+
 -- ===== FOV circle =====
 local fovCircle = Instance.new("Frame")
 fovCircle.AnchorPoint            = Vector2.new(0.5, 0.5)
@@ -108,8 +199,8 @@ Instance.new("UICorner", fovCircle).CornerRadius = UDim.new(1, 0)
 
 local fovStroke = Instance.new("UIStroke")
 fovStroke.Color        = Accent
-fovStroke.Thickness    = 1.6
-fovStroke.Transparency = 0.25
+fovStroke.Thickness    = 1.4
+fovStroke.Transparency = 0.3
 fovStroke.Parent       = fovCircle
 
 local fovDot = Instance.new("Frame")
@@ -126,9 +217,8 @@ Instance.new("UICorner", fovDot).CornerRadius = UDim.new(1, 0)
 local function updateFov()
     local cam = workspace.CurrentCamera
     if not cam then return end
-    local vp   = cam.ViewportSize
-    local maxR = math.min(vp.X, vp.Y) * 0.5
-    local r    = math.max(1, maxR * (Settings.FOV / 100))
+    camera = cam
+    local r = math.max(1, getFovRadius())
     fovCircle.Size = UDim2.fromOffset(r * 2, r * 2)
     local show = Settings.AimEnabled and Settings.ShowFov
     fovCircle.Visible = show
@@ -138,6 +228,7 @@ end
 local function hookCam()
     local cam = workspace.CurrentCamera
     if cam then
+        camera = cam
         cam:GetPropertyChangedSignal("ViewportSize"):Connect(updateFov)
     end
     updateFov()
@@ -145,58 +236,117 @@ end
 workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCam)
 hookCam()
 
--- ===== Draggable (rebuilt: UserInputService.InputEnded for release) =====
+-- ===== Draggable =====
 local function makeDraggable(frame, onTap)
     local dragging, dragStart, startPos, moved = false, nil, nil, false
-
     frame.InputBegan:Connect(function(input)
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
-        and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
-        end
-        dragging  = true
-        dragStart = input.Position
-        startPos  = frame.Position
-        moved     = false
+        and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        dragging, dragStart, startPos, moved = true, input.Position, frame.Position, false
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if not dragging then return end
         if input.UserInputType ~= Enum.UserInputType.MouseMovement
-        and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
-        end
+        and input.UserInputType ~= Enum.UserInputType.Touch then return end
         local d = input.Position - dragStart
-        if math.abs(d.X) > 6 or math.abs(d.Y) > 6 then
-            moved = true
-        end
+        if math.abs(d.X) > 6 or math.abs(d.Y) > 6 then moved = true end
         if moved then
             frame.Position = UDim2.new(
                 startPos.X.Scale, startPos.X.Offset + d.X,
                 startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
     end)
-
     UserInputService.InputEnded:Connect(function(input)
         if not dragging then return end
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
-        and input.UserInputType ~= Enum.UserInputType.Touch then
-            return
-        end
+        and input.UserInputType ~= Enum.UserInputType.Touch then return end
         dragging = false
-        if not moved and onTap then
-            onTap()
-        end
+        if not moved and onTap then onTap() end
     end)
 end
+
+-- =====================================================================
+-- FLOATING OPEN/CLOSE  (matches screenshot: rounded square + icon)
+-- =====================================================================
+local floater = Instance.new("Frame")
+floater.Name              = "Floater"
+floater.Size              = UDim2.fromOffset(46, 46)
+floater.Position          = UDim2.new(0, 14, 0, 14)
+floater.BackgroundColor3  = BG
+floater.BorderSizePixel   = 0
+floater.ZIndex            = 60
+floater.Visible           = false
+floater.Parent            = gui
+Instance.new("UICorner", floater).CornerRadius = UDim.new(0, 11)
+
+local floaterStroke = Instance.new("UIStroke")
+floaterStroke.Color        = Accent
+floaterStroke.Thickness    = 1.8
+floaterStroke.Transparency = 0.1
+floaterStroke.Parent       = floater
+
+-- outer glow ring (soft purple halo like the screenshot)
+local floaterGlow = Instance.new("Frame")
+floaterGlow.Name                   = "Glow"
+floaterGlow.AnchorPoint            = Vector2.new(0.5, 0.5)
+floaterGlow.Position               = UDim2.fromScale(0.5, 0.5)
+floaterGlow.Size                   = UDim2.fromScale(1.35, 1.35)
+floaterGlow.BackgroundColor3       = Accent
+floaterGlow.BackgroundTransparency = 0.85
+floaterGlow.BorderSizePixel        = 0
+floaterGlow.ZIndex                 = -1
+floaterGlow.Parent                 = floater
+Instance.new("UICorner", floaterGlow).CornerRadius = UDim.new(0, 14)
+
+local floaterImg = Instance.new("ImageLabel")
+floaterImg.Name                   = "Icon"
+floaterImg.AnchorPoint            = Vector2.new(0.5, 0.5)
+floaterImg.Position               = UDim2.fromScale(0.5, 0.5)
+floaterImg.Size                   = UDim2.fromScale(0.72, 0.72)
+floaterImg.BackgroundTransparency = 1
+floaterImg.Image                  = IMAGE_ID
+floaterImg.ScaleType              = Enum.ScaleType.Fit
+floaterImg.ZIndex                 = 61
+floaterImg.Parent                 = floater
+
+-- fallback "MEI" text if no image set
+local floaterFallback = Instance.new("TextLabel")
+floaterFallback.AnchorPoint            = Vector2.new(0.5, 0.5)
+floaterFallback.Position               = UDim2.fromScale(0.5, 0.5)
+floaterFallback.Size                   = UDim2.fromScale(1, 1)
+floaterFallback.BackgroundTransparency = 1
+floaterFallback.Text                   = "MEI"
+floaterFallback.TextColor3             = AccentSoft
+floaterFallback.TextSize               = 13
+floaterFallback.Font                   = Enum.Font.GothamBold
+floaterFallback.ZIndex                 = 61
+floaterFallback.Parent                 = floater
+floaterFallback.Visible = (IMAGE_ID == "" or IMAGE_ID == "rbxassetid://0")
+
+local function togglePanel()
+    main.Visible = not main.Visible
+
+    local targetColor = main.Visible and Accent or AccentDeep
+    TweenService:Create(floaterStroke, TweenInfo.new(0.15), {
+        Color = targetColor,
+    }):Play()
+
+    -- small press pop
+    floater.Size = UDim2.fromOffset(42, 42)
+    TweenService:Create(floater, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.fromOffset(46, 46),
+    }):Play()
+end
+
+makeDraggable(floater, togglePanel)
 
 -- =====================================================================
 -- KEY GATE
 -- =====================================================================
 local keyFrame = Instance.new("Frame")
 keyFrame.Name             = "KeyGate"
-keyFrame.Size             = UDim2.fromOffset(340, 300)
-keyFrame.Position         = UDim2.new(0.5, -170, 0.5, -150)
+keyFrame.Size             = UDim2.fromOffset(320, 290)
+keyFrame.Position         = UDim2.new(0.5, -160, 0.5, -145)
 keyFrame.BackgroundColor3 = BG
 keyFrame.BorderSizePixel  = 0
 keyFrame.ZIndex           = 50
@@ -210,7 +360,7 @@ keyStroke.Transparency = 0.25
 keyStroke.Parent       = keyFrame
 
 local keyHeader = Instance.new("Frame")
-keyHeader.Size             = UDim2.new(1, 0, 0, 52)
+keyHeader.Size             = UDim2.new(1, 0, 0, 50)
 keyHeader.BackgroundColor3 = Row
 keyHeader.BorderSizePixel  = 0
 keyHeader.ZIndex           = 51
@@ -231,19 +381,19 @@ keyTitle.Size                   = UDim2.new(1, -32, 1, 0)
 keyTitle.BackgroundTransparency = 1
 keyTitle.Text                   = "MEI  ·  KEY SYSTEM"
 keyTitle.TextColor3             = Accent
-keyTitle.TextSize               = 15
+keyTitle.TextSize               = 14
 keyTitle.Font                   = Enum.Font.GothamBold
 keyTitle.TextXAlignment         = Enum.TextXAlignment.Left
 keyTitle.ZIndex                 = 52
 keyTitle.Parent                 = keyHeader
 
 local keyDesc = Instance.new("TextLabel")
-keyDesc.Position               = UDim2.fromOffset(20, 64)
-keyDesc.Size                   = UDim2.new(1, -40, 0, 30)
+keyDesc.Position               = UDim2.fromOffset(20, 60)
+keyDesc.Size                   = UDim2.new(1, -40, 0, 28)
 keyDesc.BackgroundTransparency = 1
 keyDesc.Text                   = "Enter your key to unlock the panel."
 keyDesc.TextColor3             = TxtDim
-keyDesc.TextSize               = 12
+keyDesc.TextSize               = 11
 keyDesc.Font                   = Enum.Font.Gotham
 keyDesc.TextWrapped            = true
 keyDesc.TextXAlignment         = Enum.TextXAlignment.Left
@@ -251,15 +401,15 @@ keyDesc.ZIndex                 = 52
 keyDesc.Parent                 = keyFrame
 
 local keyBox = Instance.new("TextBox")
-keyBox.Position               = UDim2.fromOffset(20, 100)
-keyBox.Size                   = UDim2.new(1, -40, 0, 40)
+keyBox.Position               = UDim2.fromOffset(20, 94)
+keyBox.Size                   = UDim2.new(1, -40, 0, 38)
 keyBox.BackgroundColor3       = Row
 keyBox.BorderSizePixel        = 0
 keyBox.Text                   = ""
 keyBox.PlaceholderText        = "MEI-XXXX"
 keyBox.PlaceholderColor3      = TxtFaint
 keyBox.TextColor3             = TxtHi
-keyBox.TextSize               = 14
+keyBox.TextSize               = 13
 keyBox.Font                   = Enum.Font.GothamMedium
 keyBox.ClearTextOnFocus       = false
 keyBox.TextXAlignment         = Enum.TextXAlignment.Left
@@ -279,24 +429,24 @@ keyBoxStroke.Transparency = 0.3
 keyBoxStroke.Parent       = keyBox
 
 local keyErr = Instance.new("TextLabel")
-keyErr.Position               = UDim2.fromOffset(20, 144)
-keyErr.Size                   = UDim2.new(1, -40, 0, 16)
+keyErr.Position               = UDim2.fromOffset(20, 136)
+keyErr.Size                   = UDim2.new(1, -40, 0, 14)
 keyErr.BackgroundTransparency = 1
 keyErr.Text                   = ""
 keyErr.TextColor3             = Bad
-keyErr.TextSize               = 11
+keyErr.TextSize               = 10
 keyErr.Font                   = Enum.Font.Gotham
 keyErr.TextXAlignment         = Enum.TextXAlignment.Left
 keyErr.ZIndex                 = 52
 keyErr.Parent                 = keyFrame
 
 local submitBtn = Instance.new("TextButton")
-submitBtn.Position         = UDim2.fromOffset(20, 168)
-submitBtn.Size             = UDim2.new(1, -40, 0, 40)
+submitBtn.Position         = UDim2.fromOffset(20, 156)
+submitBtn.Size             = UDim2.new(1, -40, 0, 38)
 submitBtn.BackgroundColor3 = Accent
 submitBtn.Text             = "UNLOCK"
 submitBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
-submitBtn.TextSize         = 14
+submitBtn.TextSize         = 13
 submitBtn.Font             = Enum.Font.GothamBold
 submitBtn.BorderSizePixel  = 0
 submitBtn.AutoButtonColor  = false
@@ -310,14 +460,13 @@ submitStroke.Thickness    = 1
 submitStroke.Transparency = 0.2
 submitStroke.Parent       = submitBtn
 
--- Get Key button
 local getKeyBtn = Instance.new("TextButton")
-getKeyBtn.Position         = UDim2.fromOffset(20, 216)
-getKeyBtn.Size             = UDim2.new(1, -40, 0, 40)
+getKeyBtn.Position         = UDim2.fromOffset(20, 202)
+getKeyBtn.Size             = UDim2.new(1, -40, 0, 38)
 getKeyBtn.BackgroundColor3 = RowAlt
 getKeyBtn.Text             = "GET KEY  ·  DISCORD"
 getKeyBtn.TextColor3       = AccentSoft
-getKeyBtn.TextSize         = 13
+getKeyBtn.TextSize         = 12
 getKeyBtn.Font             = Enum.Font.GothamBold
 getKeyBtn.BorderSizePixel  = 0
 getKeyBtn.AutoButtonColor  = false
@@ -332,28 +481,27 @@ getKeyStroke.Transparency = 0.3
 getKeyStroke.Parent       = getKeyBtn
 
 local keyHint = Instance.new("TextLabel")
-keyHint.Position               = UDim2.fromOffset(20, 262)
-keyHint.Size                   = UDim2.new(1, -40, 0, 16)
+keyHint.Position               = UDim2.fromOffset(20, 246)
+keyHint.Size                   = UDim2.new(1, -40, 0, 14)
 keyHint.BackgroundTransparency = 1
-keyHint.Text                   = "Tap to copy link  ·  enter key to unlock"
+keyHint.Text                   = "tap to copy link  ·  enter key to unlock"
 keyHint.TextColor3             = TxtFaint
-keyHint.TextSize               = 10
+keyHint.TextSize               = 9
 keyHint.Font                   = Enum.Font.Gotham
 keyHint.TextXAlignment         = Enum.TextXAlignment.Center
 keyHint.ZIndex                 = 52
 keyHint.Parent                 = keyFrame
 
--- drag the header and the frame
-makeDraggable(keyHeader, nil)
-makeDraggable(keyFrame, nil)
+makeDraggable(keyHeader)
+makeDraggable(keyFrame)
 
 -- =====================================================================
 -- MAIN PANEL
 -- =====================================================================
 local main = Instance.new("Frame")
 main.Name             = "Main"
-main.Size             = UDim2.fromOffset(380, 480)
-main.Position         = UDim2.new(0.5, -190, 0.5, -240)
+main.Size             = UDim2.fromOffset(340, 400)
+main.Position         = UDim2.new(0.5, -170, 0.5, -200)
 main.BackgroundColor3 = BG
 main.BorderSizePixel  = 0
 main.ClipsDescendants = true
@@ -367,124 +515,89 @@ mainStroke.Thickness    = 1
 mainStroke.Transparency = 0.35
 mainStroke.Parent       = main
 
+-- ===== Header =====
 local header = Instance.new("Frame")
 header.Name                   = "Header"
-header.Size                   = UDim2.new(1, 0, 0, 60)
+header.Size                   = UDim2.new(1, 0, 0, 52)
 header.BackgroundTransparency = 1
 header.Parent                 = main
 
 local title = Instance.new("TextLabel")
-title.Position               = UDim2.fromOffset(16, 12)
-title.Size                   = UDim2.new(1, -160, 0, 22)
+title.Position               = UDim2.fromOffset(14, 8)
+title.Size                   = UDim2.new(1, -110, 0, 18)
 title.BackgroundTransparency = 1
 title.Text                   = "MEI"
 title.TextColor3             = Accent
-title.TextSize               = 17
+title.TextSize               = 15
 title.Font                   = Enum.Font.GothamBold
 title.TextXAlignment         = Enum.TextXAlignment.Left
 title.Parent                 = header
 
 local sub = Instance.new("TextLabel")
-sub.Position               = UDim2.fromOffset(16, 34)
-sub.Size                   = UDim2.new(1, -160, 0, 14)
+sub.Position               = UDim2.fromOffset(14, 27)
+sub.Size                   = UDim2.new(1, -110, 0, 12)
 sub.BackgroundTransparency = 1
 sub.Text                   = "by MEI"
 sub.TextColor3             = TxtFaint
-sub.TextSize               = 11
+sub.TextSize               = 10
 sub.Font                   = Enum.Font.Gotham
 sub.TextXAlignment         = Enum.TextXAlignment.Left
 sub.Parent                 = header
 
 local expiresLbl = Instance.new("TextLabel")
 expiresLbl.AnchorPoint            = Vector2.new(1, 0)
-expiresLbl.Position               = UDim2.new(1, -70, 0, 12)
-expiresLbl.Size                   = UDim2.fromOffset(120, 16)
+expiresLbl.Position               = UDim2.new(1, -50, 0, 8)
+expiresLbl.Size                   = UDim2.fromOffset(100, 13)
 expiresLbl.BackgroundTransparency = 1
 expiresLbl.Text                   = "Expires at"
 expiresLbl.TextColor3             = Accent
-expiresLbl.TextSize               = 11
+expiresLbl.TextSize               = 10
 expiresLbl.Font                   = Enum.Font.GothamBold
 expiresLbl.TextXAlignment         = Enum.TextXAlignment.Right
 expiresLbl.Parent                 = header
 
 local expiresVal = Instance.new("TextLabel")
 expiresVal.AnchorPoint            = Vector2.new(1, 0)
-expiresVal.Position               = UDim2.new(1, -70, 0, 28)
-expiresVal.Size                   = UDim2.fromOffset(120, 16)
+expiresVal.Position               = UDim2.new(1, -50, 0, 23)
+expiresVal.Size                   = UDim2.fromOffset(100, 13)
 expiresVal.BackgroundTransparency = 1
 expiresVal.Text                   = "Unlimited"
 expiresVal.TextColor3             = TxtDim
-expiresVal.TextSize               = 11
+expiresVal.TextSize               = 10
 expiresVal.Font                   = Enum.Font.Gotham
 expiresVal.TextXAlignment         = Enum.TextXAlignment.Right
 expiresVal.Parent                 = header
 
-local headerIcon = Instance.new("Frame")
-headerIcon.AnchorPoint      = Vector2.new(1, 0)
-headerIcon.Position         = UDim2.new(1, -16, 0, 20)
-headerIcon.Size             = UDim2.fromOffset(26, 26)
-headerIcon.BackgroundColor3 = RowAlt
-headerIcon.BorderSizePixel  = 0
-headerIcon.Parent           = header
-Instance.new("UICorner", headerIcon).CornerRadius = UDim.new(1, 0)
+local headerBadge = Instance.new("Frame")
+headerBadge.AnchorPoint      = Vector2.new(1, 0.5)
+headerBadge.Position         = UDim2.new(1, -14, 0, 26)
+headerBadge.Size             = UDim2.fromOffset(24, 24)
+headerBadge.BackgroundColor3 = BG
+headerBadge.BorderSizePixel  = 0
+headerBadge.Parent           = header
+Instance.new("UICorner", headerBadge).CornerRadius = UDim.new(1, 0)
 
-local iconStroke = Instance.new("UIStroke")
-iconStroke.Color     = Accent
-iconStroke.Thickness = 1.5
-iconStroke.Parent    = headerIcon
+local badgeStroke = Instance.new("UIStroke")
+badgeStroke.Color        = Accent
+badgeStroke.Thickness    = 1.8
+badgeStroke.Transparency = 0.15
+badgeStroke.Parent       = headerBadge
 
-local iconGlyph = Instance.new("TextLabel")
-iconGlyph.Size                   = UDim2.fromScale(1, 1)
-iconGlyph.BackgroundTransparency = 1
-iconGlyph.Text                   = "!"
-iconGlyph.TextColor3             = Accent
-iconGlyph.TextSize               = 15
-iconGlyph.Font                   = Enum.Font.GothamBold
-iconGlyph.Parent                 = headerIcon
+local badgeDot = Instance.new("Frame")
+badgeDot.AnchorPoint      = Vector2.new(0.5, 0.5)
+badgeDot.Position         = UDim2.fromScale(0.5, 0.5)
+badgeDot.Size             = UDim2.fromOffset(8, 8)
+badgeDot.BackgroundColor3 = Accent
+badgeDot.BorderSizePixel  = 0
+badgeDot.Parent           = headerBadge
+Instance.new("UICorner", badgeDot).CornerRadius = UDim.new(1, 0)
 
--- ===== Floating button =====
-local floatBtn = Instance.new("ImageButton")
-floatBtn.Name              = "OpenClose"
-floatBtn.Size              = UDim2.fromOffset(58, 58)
-floatBtn.Position          = UDim2.new(0, 18, 0.5, -29)
-floatBtn.BackgroundColor3  = Row
-floatBtn.BorderSizePixel   = 0
-floatBtn.AutoButtonColor   = false
-floatBtn.ZIndex            = 10
-floatBtn.Image             = IMAGE_ID
-floatBtn.ImageTransparency = 0.05
-floatBtn.ScaleType         = Enum.ScaleType.Crop
-floatBtn.Visible           = false
-floatBtn.Parent            = gui
-Instance.new("UICorner", floatBtn).CornerRadius = UDim.new(0, 12)
-
-local floatStroke = Instance.new("UIStroke")
-floatStroke.Color     = Accent
-floatStroke.Thickness = 1.8
-floatStroke.Parent    = floatBtn
-
-local floatFallback = Instance.new("TextLabel")
-floatFallback.Size                   = UDim2.fromScale(1, 1)
-floatFallback.BackgroundTransparency = 1
-floatFallback.Text                   = "MEI"
-floatFallback.TextColor3             = Accent
-floatFallback.TextSize               = 14
-floatFallback.Font                   = Enum.Font.GothamBold
-floatFallback.ZIndex                 = 11
-floatFallback.Parent                 = floatBtn
-floatFallback.Visible = (IMAGE_ID == "" or IMAGE_ID == "rbxassetid://0")
-
-local function togglePanel()
-    main.Visible = not main.Visible
-end
-
-makeDraggable(floatBtn, togglePanel)
-makeDraggable(header, nil)
+makeDraggable(header)
 
 -- ===== Content =====
 local content = Instance.new("ScrollingFrame")
-content.Position               = UDim2.fromOffset(10, 68)
-content.Size                   = UDim2.new(1, -20, 1, -106)
+content.Position               = UDim2.fromOffset(8, 54)
+content.Size                   = UDim2.new(1, -16, 1, -84)
 content.BackgroundTransparency = 1
 content.BorderSizePixel        = 0
 content.ScrollBarThickness     = 3
@@ -494,53 +607,53 @@ content.CanvasSize             = UDim2.new(0, 0, 0, 0)
 content.Parent                 = main
 
 local list = Instance.new("UIListLayout")
-list.Padding   = UDim.new(0, 5)
+list.Padding   = UDim.new(0, 4)
 list.SortOrder = Enum.SortOrder.LayoutOrder
 list.Parent    = content
 
 local function divider()
     local d = Instance.new("Frame")
     d.Size             = UDim2.new(1, -8, 0, 1)
-    d.BackgroundColor3 = Color3.fromRGB(48, 34, 68)
+    d.BackgroundColor3 = Divider
     d.BorderSizePixel  = 0
     d.Parent           = content
 end
 
 local function addToggle(name, desc, key, onChange)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 44)
+    row.Size             = UDim2.new(1, -6, 0, 40)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
 
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(14, 5)
-    label.Size                   = UDim2.new(1, -90, 0, 17)
+    label.Position               = UDim2.fromOffset(12, 5)
+    label.Size                   = UDim2.new(1, -60, 0, 15)
     label.BackgroundTransparency = 1
     label.Text                   = name
-    label.TextColor3             = Settings[key] and AccentSoft or TxtHi
-    label.TextSize               = 13
+    label.TextColor3             = Settings[key] and Accent or TxtHi
+    label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
     local descLbl = Instance.new("TextLabel")
-    descLbl.Position               = UDim2.fromOffset(14, 23)
-    descLbl.Size                   = UDim2.new(1, -90, 0, 14)
+    descLbl.Position               = UDim2.fromOffset(12, 21)
+    descLbl.Size                   = UDim2.new(1, -60, 0, 12)
     descLbl.BackgroundTransparency = 1
     descLbl.Text                   = desc or ""
     descLbl.TextColor3             = TxtFaint
-    descLbl.TextSize               = 11
+    descLbl.TextSize               = 10
     descLbl.Font                   = Enum.Font.Gotham
     descLbl.TextXAlignment         = Enum.TextXAlignment.Left
     descLbl.Parent                 = row
 
     local check = Instance.new("TextButton")
     check.AnchorPoint      = Vector2.new(1, 0.5)
-    check.Position         = UDim2.new(1, -14, 0.5, 0)
-    check.Size             = UDim2.fromOffset(26, 26)
-    check.BackgroundColor3 = Settings[key] and Accent or RowAlt
+    check.Position         = UDim2.new(1, -10, 0.5, 0)
+    check.Size             = UDim2.fromOffset(24, 24)
+    check.BackgroundColor3 = Settings[key] and Accent or BG
     check.Text             = Settings[key] and "✓" or ""
     check.TextColor3       = Color3.fromRGB(255, 255, 255)
     check.TextSize         = 14
@@ -552,7 +665,7 @@ local function addToggle(name, desc, key, onChange)
     Instance.new("UICorner", check).CornerRadius = UDim.new(0, 7)
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color        = Settings[key] and AccentSoft or Color3.fromRGB(58, 42, 80)
+    stroke.Color        = Settings[key] and AccentSoft or Color3.fromRGB(60, 42, 84)
     stroke.Thickness    = 1
     stroke.Transparency = 0.2
     stroke.Parent       = check
@@ -566,10 +679,10 @@ local function addToggle(name, desc, key, onChange)
 
     local function refresh(anim)
         local on   = Settings[key]
-        local info = anim and TweenInfo.new(0.14, Enum.EasingStyle.Quad) or TweenInfo.new(0)
-        TweenService:Create(check, info, { BackgroundColor3 = on and Accent or RowAlt }):Play()
-        TweenService:Create(stroke, info, { Color = on and AccentSoft or Color3.fromRGB(58, 42, 80) }):Play()
-        TweenService:Create(label, info, { TextColor3 = on and AccentSoft or TxtHi }):Play()
+        local info = anim and TweenInfo.new(0.13, Enum.EasingStyle.Quad) or TweenInfo.new(0)
+        TweenService:Create(check, info, { BackgroundColor3 = on and Accent or BG }):Play()
+        TweenService:Create(stroke, info, { Color = on and AccentSoft or Color3.fromRGB(60, 42, 84) }):Play()
+        TweenService:Create(label, info, { TextColor3 = on and Accent or TxtHi }):Play()
         check.Text = on and "✓" or ""
     end
 
@@ -582,38 +695,38 @@ end
 
 local function addSlider(name, key, min, max, onChange)
     local row = Instance.new("Frame")
-    row.Size             = UDim2.new(1, -6, 0, 48)
+    row.Size             = UDim2.new(1, -6, 0, 40)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
 
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(14, 7)
-    label.Size                   = UDim2.new(1, -70, 0, 17)
+    label.Position               = UDim2.fromOffset(12, 6)
+    label.Size                   = UDim2.new(1, -60, 0, 14)
     label.BackgroundTransparency = 1
     label.Text                   = name
     label.TextColor3             = TxtHi
-    label.TextSize               = 13
+    label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
     local value = Instance.new("TextLabel")
     value.AnchorPoint            = Vector2.new(1, 0)
-    value.Position               = UDim2.new(1, -14, 0, 7)
-    value.Size                   = UDim2.fromOffset(50, 17)
+    value.Position               = UDim2.new(1, -12, 0, 6)
+    value.Size                   = UDim2.fromOffset(50, 14)
     value.BackgroundTransparency = 1
     value.TextColor3             = TxtDim
-    value.TextSize               = 12
+    value.TextSize               = 11
     value.Font                   = Enum.Font.Gotham
     value.TextXAlignment         = Enum.TextXAlignment.Right
     value.Parent                 = row
 
     local track = Instance.new("TextButton")
-    track.Position         = UDim2.fromOffset(14, 32)
-    track.Size             = UDim2.new(1, -28, 0, 5)
-    track.BackgroundColor3 = Color3.fromRGB(52, 36, 72)
+    track.Position         = UDim2.fromOffset(12, 26)
+    track.Size             = UDim2.new(1, -24, 0, 4)
+    track.BackgroundColor3 = Color3.fromRGB(58, 40, 82)
     track.Text             = ""
     track.AutoButtonColor  = false
     track.ZIndex           = 2
@@ -672,33 +785,136 @@ local function addDropdown(name, key)
     row.BackgroundColor3 = Row
     row.BorderSizePixel  = 0
     row.Parent           = content
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
 
     local label = Instance.new("TextLabel")
-    label.Position               = UDim2.fromOffset(14, 0)
-    label.Size                   = UDim2.new(1, -80, 1, 0)
+    label.Position               = UDim2.fromOffset(12, 5)
+    label.Size                   = UDim2.new(1, -50, 0, 15)
     label.BackgroundTransparency = 1
-    label.Text                   = name .. "  ·  " .. Settings[key]
+    label.Text                   = name
     label.TextColor3             = TxtHi
-    label.TextSize               = 13
+    label.TextSize               = 12
+    label.Font                   = Enum.Font.GothamMedium
+    label.TextXAlignment         = Enum.TextXAlignment.Left
+    label.Parent                 = row
+    
+    local value = Instance.new("TextLabel")
+    value.AnchorPoint            = Vector2.new(1, 0)
+    value.Position               = UDim2.new(1, -12, 0, 6)
+    value.Size                   = UDim2.fromOffset(50, 14)
+    value.BackgroundTransparency = 1
+    value.TextColor3             = TxtDim
+    value.TextSize               = 11
+    value.Font                   = Enum.Font.Gotham
+    value.TextXAlignment         = Enum.TextXAlignment.Right
+    value.Parent                 = row
+
+    local track = Instance.new("TextButton")
+    track.Position         = UDim2.fromOffset(12, 26)
+    track.Size             = UDim2.new(1, -24, 0, 4)
+    track.BackgroundColor3 = Color3.fromRGB(58, 40, 82)
+    track.Text             = ""
+    track.AutoButtonColor  = false
+    track.ZIndex           = 2
+    track.Parent           = row
+    Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+    local fill = Instance.new("Frame")
+    fill.BackgroundColor3 = Accent
+    fill.BorderSizePixel  = 0
+    fill.Parent           = track
+    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+    local function update(v, fire)
+        Settings[key] = math.clamp(math.floor(v + 0.5), min, max)
+        local pct = (Settings[key] - min) / (max - min)
+        fill.Size  = UDim2.new(pct, 0, 1, 0)
+        value.Text = tostring(Settings[key])
+        if fire and onChange then onChange(Settings[key]) end
+    end
+
+    local sliding = false
+    local function setFromX(x)
+        local w = track.AbsoluteSize.X
+        if w <= 0 then return end
+        local pct = math.clamp((x - track.AbsolutePosition.X) / w, 0, 1)
+        update(min + pct * (max - min), true)
+    end
+
+    track.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            sliding = true
+            setFromX(i.Position.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if sliding and (i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(i.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+            sliding = false
+        end
+    end)
+
+    update(Settings[key], false)
+end
+
+local aimTargetOptions = {"Head", "Neck", "Chest", "Random"}
+local function addDropdown(name, key)
+    local row = Instance.new("Frame")
+    row.Size             = UDim2.new(1, -6, 0, 40)
+    row.BackgroundColor3 = Row
+    row.BorderSizePixel  = 0
+    row.Parent           = content
+    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 7)
+
+    local label = Instance.new("TextLabel")
+    label.Position               = UDim2.fromOffset(12, 5)
+    label.Size                   = UDim2.new(1, -50, 0, 15)
+    label.BackgroundTransparency = 1
+    label.Text                   = name
+    label.TextColor3             = TxtHi
+    label.TextSize               = 12
     label.Font                   = Enum.Font.GothamMedium
     label.TextXAlignment         = Enum.TextXAlignment.Left
     label.Parent                 = row
 
+    local valueLbl = Instance.new("TextLabel")
+    valueLbl.Position               = UDim2.fromOffset(12, 21)
+    valueLbl.Size                   = UDim2.new(1, -50, 0, 13)
+    valueLbl.BackgroundTransparency = 1
+    valueLbl.Text                   = Settings[key]
+    valueLbl.TextColor3             = TxtDim
+    valueLbl.TextSize               = 10
+    valueLbl.Font                   = Enum.Font.Gotham
+    valueLbl.TextXAlignment         = Enum.TextXAlignment.Left
+    valueLbl.Parent                 = row
+
     local btn = Instance.new("TextButton")
     btn.AnchorPoint      = Vector2.new(1, 0.5)
-    btn.Position         = UDim2.new(1, -14, 0.5, 0)
-    btn.Size             = UDim2.fromOffset(26, 26)
-    btn.BackgroundColor3 = RowAlt
+    btn.Position         = UDim2.new(1, -10, 0.5, 0)
+    btn.Size             = UDim2.fromOffset(24, 24)
+    btn.BackgroundColor3 = BG
     btn.Text             = "≡"
     btn.TextColor3       = TxtDim
-    btn.TextSize         = 15
+    btn.TextSize         = 14
     btn.Font             = Enum.Font.GothamBold
     btn.BorderSizePixel  = 0
     btn.AutoButtonColor  = false
     btn.ZIndex           = 2
     btn.Parent           = row
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 7)
+
+    local btnStroke = Instance.new("UIStroke")
+    btnStroke.Color        = Color3.fromRGB(60, 42, 84)
+    btnStroke.Thickness    = 1
+    btnStroke.Transparency = 0.2
+    btnStroke.Parent       = btn
 
     local idx = 1
     for i, v in ipairs(aimTargetOptions) do
@@ -708,7 +924,7 @@ local function addDropdown(name, key)
     btn.Activated:Connect(function()
         idx = (idx % #aimTargetOptions) + 1
         Settings[key] = aimTargetOptions[idx]
-        label.Text = name .. "  ·  " .. Settings[key]
+        valueLbl.Text = Settings[key]
     end)
 end
 
@@ -728,36 +944,35 @@ addDropdown("Aim Target", "AimTarget")
 -- ===== Footer =====
 local footer = Instance.new("Frame")
 footer.AnchorPoint      = Vector2.new(0.5, 1)
-footer.Position         = UDim2.new(0.5, 0, 1, -10)
-footer.Size             = UDim2.new(1, -20, 0, 26)
+footer.Position         = UDim2.new(0.5, 0, 1, -6)
+footer.Size             = UDim2.new(1, -16, 0, 22)
 footer.BackgroundColor3 = Row
 footer.BorderSizePixel  = 0
 footer.Parent           = main
 Instance.new("UICorner", footer).CornerRadius = UDim.new(1, 0)
 
 local footerText = Instance.new("TextLabel")
-footerText.Position               = UDim2.fromOffset(14, 0)
-footerText.Size                   = UDim2.new(1, -56, 1, 0)
+footerText.Position               = UDim2.fromOffset(12, 0)
+footerText.Size                   = UDim2.new(1, -44, 1, 0)
 footerText.BackgroundTransparency = 1
 footerText.Text                   = "MEI  |  FPS: --  |  PING: --"
 footerText.TextColor3             = Accent
-footerText.TextSize               = 12
+footerText.TextSize               = 11
 footerText.Font                   = Enum.Font.GothamMedium
 footerText.TextXAlignment         = Enum.TextXAlignment.Left
 footerText.Parent                 = footer
 
 local footerIcon = Instance.new("TextLabel")
 footerIcon.AnchorPoint            = Vector2.new(1, 0.5)
-footerIcon.Position               = UDim2.new(1, -12, 0.5, 0)
-footerIcon.Size                   = UDim2.fromOffset(20, 20)
+footerIcon.Position               = UDim2.new(1, -8, 0.5, 0)
+footerIcon.Size                   = UDim2.fromOffset(18, 18)
 footerIcon.BackgroundTransparency = 1
 footerIcon.Text                   = "≡"
 footerIcon.TextColor3             = TxtDim
-footerIcon.TextSize               = 15
+footerIcon.TextSize               = 14
 footerIcon.Font                   = Enum.Font.GothamBold
 footerIcon.Parent                 = footer
 
--- ===== FPS/PING =====
 local smoothedFps = 60
 RunService.RenderStepped:Connect(function(dt)
     if dt > 0 then smoothedFps = smoothedFps * 0.9 + (1 / dt) * 0.1 end
@@ -786,20 +1001,19 @@ local unlocked = false
 local function unlock()
     if unlocked then return end
     unlocked = true
-    print("[MeiUI] unlocking")
-
-    keyFrame.Visible = false
     keyFrame:Destroy()
+    main.Visible    = true
+    floater.Visible = true
 
-    main.Visible     = true
-    floatBtn.Visible = true
-
-    main.Size = UDim2.fromOffset(340, 430)
+    main.Size = UDim2.fromOffset(300, 360)
     TweenService:Create(main, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Size = UDim2.fromOffset(380, 480),
+        Size = UDim2.fromOffset(340, 400),
     }):Play()
 
-    print("[MeiUI] unlocked")
+    floater.Size = UDim2.fromOffset(36, 36)
+    TweenService:Create(floater, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.fromOffset(46, 46),
+    }):Play()
 end
 
 local function shakeKeyFrame()
@@ -816,7 +1030,6 @@ end
 
 local function trySubmit()
     local raw = (keyBox.Text or ""):gsub("%s+", ""):upper()
-    print("[MeiUI] submit: " .. raw)
     if raw == "" then
         keyErr.Text = "Enter a key first."
         shakeKeyFrame()
@@ -838,20 +1051,19 @@ local function trySubmit()
 end
 
 submitBtn.Activated:Connect(trySubmit)
-
 keyBox.FocusLost:Connect(function(enterPressed)
     if enterPressed then trySubmit() end
 end)
 
 getKeyBtn.Activated:Connect(function()
-    print("[MeiUI] get key: " .. DISCORD_URL)
     local ok = pcall(function() setclipboard(DISCORD_URL) end)
     if ok then
         getKeyBtn.Text = "COPIED  ✓"
         task.wait(1.2)
         getKeyBtn.Text = "GET KEY  ·  DISCORD"
     else
-        getKeyBtn.Text = "SEE CONSOLE FOR LINK"
+        getKeyBtn.Text = "SEE CONSOLE"
+        print("[MeiUI] " .. DISCORD_URL)
         task.wait(1.2)
         getKeyBtn.Text = "GET KEY  ·  DISCORD"
     end
@@ -861,17 +1073,13 @@ end)
 -- BOOT
 -- =====================================================================
 local saved = loadSavedKey()
-print("[MeiUI] saved key: " .. tostring(saved))
-
 if saved and isValidKey(saved) then
     unlock()
 else
     keyFrame.Visible = true
     main.Visible     = false
-    floatBtn.Visible = false
-    task.defer(function()
-        pcall(function() keyBox:CaptureFocus() end)
-    end)
+    floater.Visible  = false
+    task.defer(function() pcall(function() keyBox:CaptureFocus() end) end)
 end
 
 updateFov()
