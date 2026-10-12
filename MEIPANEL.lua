@@ -983,12 +983,9 @@ local function trySubmit()
     end
 end
 
-submitBtn.Activated:Connect(trySubmit)
-keyBox.FocusLost:Connect(function(enterPressed)
-    if enterPressed then trySubmit() end
-end)
+submitBtn.MouseButton1Click:Connect(trySubmit)
 
-getKeyBtn.Activated:Connect(function()
+getKeyBtn.MouseButton1Click:Connect(function()
     local ok = pcall(function() setclipboard(DISCORD_URL) end)
     if ok then
         getKeyBtn.Text = "COPIED  ✓"
